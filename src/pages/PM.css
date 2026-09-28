@@ -1,0 +1,854 @@
+/* ================================================= */
+/* PÁGINA PM */
+/* ================================================= */
+
+.pm {
+  width: 100%;
+  padding: 22px 24px 28px;
+  box-sizing: border-box;
+}
+
+/* ================================================= */
+/* SECCIÓN PRINCIPAL */
+/* ================================================= */
+
+.pm-section {
+  width: 100%;
+  background: #ffffff;
+  border: 1px solid #e6e9eb;
+  border-radius: 10px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+/* ================================================= */
+/* ENCABEZADO */
+/* ================================================= */
+
+.pm-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 20px 22px;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.pm-section-header > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pm-section-label {
+  display: block;
+  margin: 0;
+  color: #2f6fa3;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  line-height: 1;
+}
+
+.pm-section-header h2 {
+  margin: 0;
+  color: #30353a;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+/* ================================================= */
+/* CONTROLES DEL ENCABEZADO */
+/* ================================================= */
+
+.pm-header-controles {
+  display: flex;
+  flex-direction: row !important;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* ================================================= */
+/* FILTROS */
+/* ================================================= */
+
+.pm-filtros {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.pm-filtro {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 92px;
+}
+
+.pm-filtro label {
+  margin: 0;
+  color: #62696e;
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1;
+  text-align: left;
+}
+
+.pm-filtro select {
+  width: 100%;
+  height: 32px;
+  padding: 0 26px 0 9px;
+  border: 1px solid #dfe3e6;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #555b60;
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: 500;
+  outline: none;
+  cursor: pointer;
+  box-sizing: border-box;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease;
+}
+
+.pm-filtro select:hover {
+  border-color: #cbd2d7;
+  background: #fafbfc;
+}
+
+.pm-filtro select:focus {
+  border-color: #2f6fa3;
+  box-shadow: 0 0 0 2px rgba(47, 111, 163, 0.08);
+}
+
+/* ================================================= */
+/* BOTÓN LIMPIAR FILTROS */
+/* ================================================= */
+
+.pm-btn-limpiar-filtros {
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid #dfe3e6;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #737a7f;
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+  box-sizing: border-box;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.pm-btn-limpiar-filtros:hover {
+  background: #f6f8f9;
+  border-color: #cbd2d7;
+  color: #4f575c;
+}
+
+/* ================================================= */
+/* BOTÓN NUEVA ACTIVIDAD */
+/* ================================================= */
+
+.pm-btn-nueva {
+  width: auto;
+  min-width: 0;
+  height: 32px;
+  padding: 0 13px;
+  border: none;
+  border-radius: 6px;
+  background: #2f6fa3;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  white-space: nowrap;
+  box-sizing: border-box;
+  transition: background 0.2s ease;
+}
+
+.pm-btn-nueva:hover {
+  background: #245a86;
+}
+
+/* ================================================= */
+/* FORMULARIO */
+/* ================================================= */
+
+.pm-formulario-contenedor {
+  padding: 22px;
+  box-sizing: border-box;
+}
+
+.pm-formulario-header {
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.pm-formulario-header span {
+  display: block;
+  margin-bottom: 5px;
+  color: #2f6fa3;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+}
+
+.pm-formulario-header h3 {
+  margin: 0;
+  color: #30353a;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+/* ================================================= */
+/* CAMPOS */
+/* ================================================= */
+
+.pm-formulario {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 17px 18px;
+}
+
+.pm-formulario-campo {
+  display: flex;
+  flex-direction: column;
+}
+
+.pm-formulario-campo label {
+  margin-bottom: 6px;
+  color: #555b60;
+  font-size: 10px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.pm-formulario-campo input,
+.pm-formulario-campo select {
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid #dfe3e6;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #40464b;
+  font-family: inherit;
+  font-size: 11px;
+  text-align: center;
+  outline: none;
+  box-sizing: border-box;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.pm-formulario-campo input::placeholder {
+  color: #a5aaae;
+  text-align: center;
+}
+
+.pm-formulario-campo input:focus,
+.pm-formulario-campo select:focus {
+  border-color: #2f6fa3;
+  box-shadow: 0 0 0 2px rgba(47, 111, 163, 0.08);
+}
+
+/* ================================================= */
+/* ACCIONES DEL FORMULARIO */
+/* ================================================= */
+
+.pm-formulario-acciones {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 9px;
+  margin-top: 5px;
+  padding-top: 18px;
+  border-top: 1px solid #edf0f2;
+}
+
+.pm-btn-cancelar,
+.pm-btn-guardar {
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pm-btn-cancelar {
+  border: 1px solid #dfe3e6;
+  background: #ffffff;
+  color: #6f767b;
+}
+
+.pm-btn-cancelar:hover {
+  background: #f6f7f8;
+}
+
+.pm-btn-guardar {
+  border: 1px solid #2f6fa3;
+  background: #2f6fa3;
+  color: #ffffff;
+}
+
+.pm-btn-guardar:hover {
+  background: #245a86;
+}
+
+/* ================================================= */
+/* TABLA */
+/* ================================================= */
+
+.pm-tabla-contenedor {
+  width: 100%;
+  border-top: 1px solid #e9ecef;
+  box-sizing: border-box;
+}
+
+.pm-tabla-resumen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 22px;
+  color: #555b60;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.pm-tabla-resumen strong {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: #eef4f8;
+  color: #2f6fa3;
+  font-size: 10px;
+}
+
+/* ================================================= */
+/* SCROLL DE TABLA */
+/* ================================================= */
+
+.pm-tabla-scroll {
+  width: 100%;
+  overflow-x: auto;
+}
+
+/* ================================================= */
+/* TABLA */
+/* ================================================= */
+
+.pm-tabla {
+  width: 100%;
+  min-width: 1080px;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+.pm-tabla thead {
+  background: #f6f8f9;
+}
+
+.pm-tabla th {
+  padding: 10px 12px;
+  border-bottom: 1px solid #e2e6e8;
+  color: #62696e;
+  font-size: 9px;
+  font-weight: 700;
+  text-align: center;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.pm-tabla td {
+  padding: 11px 12px;
+  border-bottom: 1px solid #edf0f2;
+  color: #4d5459;
+  font-size: 10px;
+  text-align: center;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.pm-tabla td:first-child,
+.pm-tabla th:first-child {
+  text-align: left;
+}
+
+.pm-tabla tbody tr:hover {
+  background: #fafbfc;
+}
+
+.pm-tabla tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* ================================================= */
+/* ESTADOS */
+/* ================================================= */
+
+.pm-estado {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 22px;
+  padding: 3px 8px;
+  border-radius: 11px;
+  font-size: 9px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.pm-estado-p {
+  background: #eef4f8;
+  color: #2f6fa3;
+}
+
+.pm-estado-e {
+  background: #edf6f0;
+  color: #4c9a6a;
+}
+
+.pm-estado-er {
+  background: #eef2f8;
+  color: #5b82bd;
+}
+
+.pm-estado-ne {
+  background: #f8eeee;
+  color: #b35c5c;
+}
+
+/* ================================================= */
+/* CONTENEDOR DE ACCIONES */
+/* ================================================= */
+
+.pm-acciones {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+/* ================================================= */
+/* BOTÓN MARCAR NO EJECUTADA */
+/* ================================================= */
+
+.pm-btn-no-ejecutada {
+  height: 27px;
+  padding: 0 9px;
+  border: 1px solid #e3d7b9;
+  border-radius: 5px;
+  background: #ffffff;
+  color: #9a7a35;
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.pm-btn-no-ejecutada:hover {
+  background: #fbf7ec;
+  border-color: #d7c491;
+  color: #82651f;
+}
+
+/* ================================================= */
+/* BOTÓN DETALLES */
+/* ================================================= */
+
+.pm-btn-detalles {
+  height: 27px;
+  padding: 0 10px;
+  border: 1px solid #dfe3e6;
+  border-radius: 5px;
+  background: #ffffff;
+  color: #6f767b;
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.pm-btn-detalles:hover {
+  background: #f6f8f9;
+  border-color: #cbd2d7;
+  color: #4f575c;
+}
+
+/* ================================================= */
+/* DETALLES CON INFORMACIÓN */
+/* ================================================= */
+
+.pm-btn-detalles-activo {
+  border-color: #b9ddc5;
+  background: #edf8f0;
+  color: #4c9a6a;
+}
+
+.pm-btn-detalles-activo:hover {
+  background: #e3f4e8;
+  border-color: #9fceb0;
+  color: #3f8458;
+}
+
+/* ================================================= */
+/* BOTÓN ELIMINAR */
+/* ================================================= */
+
+.pm-btn-eliminar {
+  height: 27px;
+  padding: 0 9px;
+  border: 1px solid #e3caca;
+  border-radius: 5px;
+  background: #ffffff;
+  color: #a75b5b;
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.pm-btn-eliminar:hover {
+  background: #fbf2f2;
+  border-color: #d8b4b4;
+}
+
+/* ================================================= */
+/* SIN RESULTADOS */
+/* ================================================= */
+
+.pm-sin-resultados {
+  height: 90px;
+  padding: 20px;
+  color: #8a9196 !important;
+  font-size: 10px !important;
+  text-align: center !important;
+  vertical-align: middle;
+}
+
+/* ================================================= */
+/* MODAL DE DETALLES */
+/* ================================================= */
+
+.pm-detalles-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(35, 42, 47, 0.35);
+  box-sizing: border-box;
+}
+
+.pm-detalles-modal {
+  width: min(520px, 100%);
+  background: #ffffff;
+  border: 1px solid #e1e5e8;
+  border-radius: 10px;
+  box-shadow: 0 12px 35px rgba(30, 40, 48, 0.16);
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* ================================================= */
+/* ENCABEZADO MODAL */
+/* ================================================= */
+
+.pm-detalles-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px 20px;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.pm-detalles-header span {
+  display: block;
+  margin-bottom: 5px;
+  color: #2f6fa3;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+}
+
+.pm-detalles-header h3 {
+  margin: 0;
+  color: #30353a;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.pm-detalles-header p {
+  margin: 4px 0 0;
+  color: #858c91;
+  font-size: 10px;
+}
+
+.pm-detalles-cerrar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid #e2e6e8;
+  border-radius: 50%;
+  background: #ffffff;
+  color: #737a7f;
+  font-family: inherit;
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.pm-detalles-cerrar:hover {
+  background: #f6f7f8;
+  border-color: #d5dade;
+  color: #454c51;
+}
+
+/* ================================================= */
+/* CONTENIDO MODAL */
+/* ================================================= */
+
+.pm-detalles-contenido {
+  padding: 20px;
+}
+
+.pm-detalles-contenido label {
+  display: block;
+  margin-bottom: 7px;
+  color: #555b60;
+  font-size: 10px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.pm-detalles-contenido textarea {
+  width: 100%;
+  min-height: 130px;
+  padding: 10px 11px;
+  border: 1px solid #dfe3e6;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #40464b;
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1.5;
+  resize: vertical;
+  outline: none;
+  box-sizing: border-box;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.pm-detalles-contenido textarea::placeholder {
+  color: #a5aaae;
+}
+
+.pm-detalles-contenido textarea:focus {
+  border-color: #2f6fa3;
+  box-shadow: 0 0 0 2px rgba(47, 111, 163, 0.08);
+}
+
+/* ================================================= */
+/* ACCIONES MODAL */
+/* ================================================= */
+
+.pm-detalles-acciones {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 15px 20px 18px;
+  border-top: 1px solid #edf0f2;
+}
+
+/* ================================================= */
+/* ESTADO VACÍO */
+/* ================================================= */
+
+.pm-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 260px;
+  padding: 30px;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.pm-empty-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  margin-bottom: 12px;
+  border-radius: 50%;
+  background: #eef4f8;
+  font-size: 24px;
+}
+
+.pm-empty h3 {
+  margin: 0;
+  color: #454b50;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.pm-empty p {
+  max-width: 420px;
+  margin: 7px 0 0;
+  color: #969ca1;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* ================================================= */
+/* RESPONSIVE */
+/* ================================================= */
+
+@media (max-width: 1100px) {
+  .pm-section-header {
+    align-items: flex-start;
+  }
+
+  .pm-header-controles {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .pm-filtros {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 900px) {
+  .pm-formulario {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 700px) {
+  .pm-section-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 15px;
+  }
+
+  .pm-header-controles {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .pm-filtros {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .pm-filtro {
+    flex: 1;
+    min-width: 100px;
+  }
+
+  .pm-btn-nueva {
+    align-self: flex-start;
+  }
+}
+
+@media (max-width: 600px) {
+  .pm {
+    padding: 15px;
+  }
+
+  .pm-header-controles {
+    flex-direction: column !important;
+    align-items: stretch;
+  }
+
+  .pm-filtros {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .pm-filtro {
+    width: 100%;
+  }
+
+  .pm-btn-limpiar-filtros {
+    align-self: flex-start;
+  }
+
+  .pm-btn-nueva {
+    align-self: flex-start;
+  }
+
+  .pm-formulario {
+    grid-template-columns: 1fr;
+  }
+
+  .pm-formulario-acciones {
+    grid-column: auto;
+  }
+
+  .pm-tabla {
+    min-width: 1080px;
+  }
+
+  .pm-detalles-overlay {
+    padding: 12px;
+  }
+
+  .pm-detalles-modal {
+    width: 100%;
+  }
+}

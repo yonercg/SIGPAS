@@ -1,0 +1,2695 @@
+/* ============================================================
+   SIGPAS — INFORMES
+   Primera hoja y contenido del informe
+   Formato: CARTA / VERTICAL
+   ============================================================ */
+
+/* ============================================================
+   CONTENEDOR GENERAL
+   ============================================================ */
+
+.informes-contenedor {
+  width: 100%;
+  max-width: 1450px;
+  margin: 0 auto;
+  padding: 28px 32px 50px;
+  box-sizing: border-box;
+}
+
+/* ============================================================
+   ENCABEZADO DE LA PÁGINA DE INFORMES
+   ============================================================ */
+
+.informes-pagina-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 24px;
+  margin-bottom: 1px;
+  padding: 15px 22px;
+  border: 1px solid #e1e7ec;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 3px 12px rgba(35, 48, 61, 0.06);
+  box-sizing: border-box;
+}
+
+.informes-editor-etiqueta {
+  display: inline-flex;
+  align-items: flex-center;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 6px;
+  background: #eef3f8;
+  color: #526274;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.informes-pagina-header h1 {
+  display: inline-flex;
+  margin: 5px 10px 0;
+  color: #0056a4;
+  font-size: 20px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+}
+
+.informes-pagina-header > div:first-child {
+  flex: 10 1 flex-start;
+  min-width: 0;
+}
+
+.informes-pagina-header p {
+  margin: 0;
+  color: #6c8474;
+  font-size: 14px;
+}
+
+/* ============================================================
+   BOTONES
+   ============================================================ */
+
+.btn-nuevo-informe {
+  border: 0;
+  border-radius: 6px;
+  padding: 7px 10px;
+  background: #1f4e79;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: 0.18s ease;
+}
+
+.btn-nuevo-informe:hover {
+  background: #173d60;
+}
+
+.btn-nuevo-informe-header {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  height: 32px;
+  padding: 0 35px;
+  font-size: 11px;
+  box-shadow: 0 2px 5px rgba(31, 78, 121, 0.14);
+}
+
+.btn-editor-volver,
+.btn-editor-guardar {
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: fit-content;
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid #dfe3e6;
+  border-radius: 5px;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  box-sizing: border-box;
+  white-space: nowrap;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-editor-volver {
+  background: #eef2f6;
+  color: #344454;
+}
+
+.btn-editor-volver:hover {
+  background: #e1e7ed;
+}
+
+.btn-editor-guardar {
+  background: #1f4e79;
+  color: #ffffff;
+}
+
+.btn-editor-guardar:hover {
+  background: #173d60;
+}
+
+/* ============================================================
+   RESUMEN
+   ============================================================ */
+
+.informes-resumen {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.informe-resumen-card {
+  background: #ffffff;
+  border: 1px solid #dfe5eb;
+  border-radius: 10px;
+  padding: 17px 18px;
+}
+
+.informe-resumen-card span {
+  display: block;
+  color: #707c89;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.informe-resumen-card strong {
+  color: #1d2b39;
+  font-size: 24px;
+}
+
+/* ============================================================
+   FILTROS
+   Layout 4 x 2:
+   ┌──────────────┬──────────┬──────────┬──────────┐
+   │  Buscar      │  Año     │  Mes     │  Semana  │
+   ├──────────────┼──────────┼──────────┼──────────┤
+   │  Limpiar     │ Subest.  │ Cuadrilla│          │
+   └──────────────┴──────────┴──────────┴──────────┘
+   ============================================================ */
+
+.informes-filtros {
+  display: grid;
+  grid-template-columns: minmax(240px, 1.4fr) repeat(3, minmax(140px, 1fr));
+  grid-template-areas:
+    "buscar anio mes semana"
+    "limpiar subestacion cuadrilla cuadrilla";
+  gap: 12px;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
+}
+
+.campo-busqueda {
+  grid-area: buscar;
+}
+
+.campo-anio {
+  grid-area: anio;
+}
+
+.campo-mes {
+  grid-area: mes;
+}
+
+.campo-semana {
+  grid-area: semana;
+}
+
+.btn-limpiar-informes {
+  grid-area: limpiar;
+  align-self: end;
+}
+
+.campo-subestacion {
+  grid-area: subestacion;
+}
+
+.campo-cuadrilla {
+  grid-area: cuadrilla;
+}
+
+.campo-filtro {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.campo-filtro label {
+  color: #596878;
+  font-size: 11px;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.campo-filtro input,
+.campo-filtro select {
+  width: 100%;
+  min-height: 38px;
+  box-sizing: border-box;
+
+  border: 1px solid #d5dde5;
+  border-radius: 7px;
+
+  background: #ffffff;
+
+  padding: 0 11px;
+
+  color: #263442;
+
+  font-size: 13px;
+
+  outline: none;
+}
+
+.campo-filtro input:focus,
+.campo-filtro select:focus {
+  border-color: #7294b2;
+}
+
+/* Botón limpiar dentro de los filtros */
+
+.btn-limpiar-informes {
+  min-height: 38px;
+  padding: 0 18px;
+  border: 1px solid #d5dde6;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #536174;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  box-sizing: border-box;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease;
+}
+
+.btn-limpiar-informes:hover {
+  background: #f5f8fb;
+  border-color: #b9c6d4;
+}
+
+/* ============================================================
+   TABLA
+   ============================================================ */
+
+.informes-tabla-contenedor {
+  overflow: hidden;
+
+  border: 1px solid #dfe5eb;
+  border-radius: 10px;
+
+  background: #ffffff;
+}
+
+.informes-tabla {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.informes-tabla thead {
+  background: #f4f7fa;
+}
+
+.informes-tabla th {
+  padding: 12px 14px;
+
+  border-bottom: 1px solid #dfe5eb;
+
+  color: #566575;
+
+  font-size: 11px;
+  font-weight: 800;
+
+  text-align: center;
+
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.columna-seleccion {
+  width: 42px;
+  padding-left: 14px !important;
+  padding-right: 4px !important;
+  text-align: center !important;
+}
+
+.columna-seleccion input {
+  width: 15px;
+  height: 15px;
+  accent-color: #0056a4;
+  cursor: pointer;
+}
+
+.informes-seleccion-barra {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 38px;
+  margin: -7px 0 12px;
+  color: #667482;
+  font-size: 12px;
+}
+
+.informes-seleccion-barra .btn-tabla:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.informes-tabla td {
+  padding: 13px 14px;
+
+  border-bottom: 1px solid #edf0f3;
+
+  color: #344352;
+
+  font-size: 13px;
+
+  text-align: center;
+  vertical-align: middle;
+}
+
+.informes-tabla tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.informes-tabla tbody tr:hover {
+  background: #fafcfd;
+}
+
+/* ============================================================
+   BADGE DE SEMANA EN LA TABLA DE INFORMES
+   ============================================================ */
+
+.informe-semana-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 10px;
+  background: #eef4fa;
+  color: #1f4f82;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* ============================================================
+   ESTADOS
+   ============================================================ */
+
+.estado-informe {
+  display: inline-flex;
+  align-items: center;
+
+  border-radius: 20px;
+
+  padding: 5px 9px;
+
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.estado-borrador {
+  background: #f1f3f5;
+  color: #59636d;
+}
+
+.estado-en-revisión {
+  background: #fff5dc;
+  color: #866516;
+}
+
+.estado-aprobado {
+  background: #e5f5eb;
+  color: #2f7045;
+}
+
+/* ============================================================
+   ACCIONES
+   ============================================================ */
+
+.acciones-informe {
+  display: flex;
+  gap: 7px;
+  justify-content: center;
+}
+
+.btn-tabla {
+  border: 1px solid #d6dee6;
+  border-radius: 6px;
+
+  padding: 6px 10px;
+
+  background: #ffffff;
+  color: #3e5368;
+
+  font-size: 11px;
+  font-weight: 700;
+
+  cursor: pointer;
+}
+
+.btn-tabla:hover {
+  background: #f2f6f9;
+}
+
+.btn-tabla-eliminar {
+  color: #a34545;
+}
+
+.btn-tabla-eliminar:hover {
+  background: #fff4f4;
+  border-color: #e5bebe;
+}
+
+/* ============================================================
+   ESTADO VACÍO
+   ============================================================ */
+
+.informes-tabla-vacia {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  min-height: 270px;
+
+  padding: 35px;
+
+  text-align: center;
+}
+
+.informes-vacio-icono {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 44px;
+  height: 44px;
+
+  margin-bottom: 12px;
+
+  border-radius: 50%;
+
+  background: #f0f3f6;
+  color: #71808f;
+
+  font-size: 20px;
+}
+
+.informes-tabla-vacia h3 {
+  margin: 0 0 5px;
+
+  color: #344352;
+
+  font-size: 16px;
+}
+
+.informes-tabla-vacia p {
+  margin: 0 0 17px;
+
+  color: #7a8793;
+
+  font-size: 13px;
+}
+
+/* ============================================================
+   EDITOR GENERAL
+   ============================================================ */
+
+.informes-editor {
+  width: 100%;
+  min-height: 100vh;
+
+  background: #eef1f4;
+}
+
+/* ============================================================
+   BARRA SUPERIOR DEL EDITOR
+   NO SE IMPRIME
+   ============================================================ */
+
+.informes-editor-barra {
+  position: sticky;
+  top: 0;
+
+  z-index: 20;
+
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 6px;
+
+  min-height: 52px;
+
+  padding: 5px 12px;
+
+  background: #ffffff;
+
+  border-bottom: 1px solid #dce2e8;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.informes-editor-barra .btn-editor-guardar {
+  margin-left: 2px;
+  flex: 0 0 auto;
+}
+
+.informes-editor-titulo {
+  display: flex;
+  align-items: center;
+
+  gap: 9px;
+  min-width: 0;
+  flex: 0 1 150px;
+  margin: 0 4px;
+  white-space: nowrap;
+}
+
+.informes-editor-titulo span {
+  color: #7a8794;
+
+  font-size: 10px;
+  font-weight: 800;
+
+  letter-spacing: 0.08em;
+}
+
+.informes-editor-titulo strong {
+  color: #263645;
+
+  font-size: 14px;
+}
+
+/* ============================================================
+   CONTENEDOR DEL DOCUMENTO
+   ============================================================ */
+
+.informe-documento-contenedor {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  gap: 28px;
+
+  width: 100%;
+
+  padding: 35px 20px 60px;
+
+  box-sizing: border-box;
+
+  /*
+   * Se permite desplazamiento horizontal únicamente si la
+   * ventana es demasiado pequeña para mostrar una hoja Carta.
+   *
+   * NO existe scroll vertical interno dentro del documento.
+   */
+  overflow-x: auto;
+  overflow-y: visible;
+}
+
+/* ============================================================
+   HOJA CARTA
+   21.59 cm × 27.94 cm
+
+   Márgenes:
+   Superior: 2.5 cm
+   Inferior: 2.5 cm
+   Izquierdo: 2 cm
+   Derecho: 2 cm
+
+   Área útil aproximada:
+   Ancho: 17.59 cm
+   Alto: 22.94 cm
+   ============================================================ */
+
+.informe-hoja {
+  position: relative;
+
+  width: 21.59cm;
+  min-width: 21.59cm;
+
+  /*
+   * La hoja conserva el tamaño físico de una página Carta.
+   * El contenido largo se desplaza dentro de la hoja para que
+   * los márgenes no se pierdan ni la hoja crezca indefinidamente.
+   */
+  height: 27.94cm;
+  max-height: 27.94cm;
+
+  box-sizing: border-box;
+
+  padding-top: 2.5cm;
+  padding-right: 2cm;
+  padding-bottom: 2.5cm;
+  padding-left: 2cm;
+
+  background: #ffffff;
+
+  border: 1px solid #d6dce2;
+
+  box-shadow: 0 8px 28px rgba(35, 48, 61, 0.12);
+
+  color: #111111;
+
+  overflow-x: hidden;
+  overflow: hidden;
+}
+
+/* ============================================================
+   PÁGINAS ADICIONALES
+   ============================================================ */
+
+.informe-hoja-pagina {
+  flex: 0 0 auto;
+
+  width: 21.59cm;
+  min-width: 21.59cm;
+  height: 27.94cm;
+  max-height: 27.94cm;
+  min-height: 27.94cm;
+
+  box-sizing: border-box;
+
+  padding-top: 2.5cm;
+  padding-right: 2cm;
+  padding-bottom: 2.5cm;
+  padding-left: 2cm;
+
+  background: #ffffff;
+
+  border: 1px solid #d6dce2;
+
+  box-shadow: 0 8px 28px rgba(35, 48, 61, 0.12);
+
+  overflow: hidden;
+}
+
+.informe-hoja-continuacion {
+  flex: 0 0 auto;
+  color: #111111;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.informe-continuacion-titulo {
+  padding-bottom: 8px;
+  border-bottom: 1px solid #111111;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.informe-hoja-continuacion p {
+  margin: 12px 0 0;
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.informe-hoja-continuacion .informe-continuacion-titulo {
+  margin-bottom: 8px;
+}
+
+/* ============================================================
+   REPORTE DE ANOMALÍAS IDENTIFICADAS
+   ============================================================ */
+
+.informe-hoja-anomalias {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  width: 27.94cm;
+  min-width: 27.94cm;
+  height: 21.59cm;
+  min-height: 21.59cm;
+  max-height: 21.59cm;
+  padding: 1.2cm 1.3cm;
+  page: reporte-anomalias;
+}
+
+.reporte-anomalias-encabezado {
+  display: table;
+  flex: 0 0 auto;
+  width: 100%;
+  margin-top: 0;
+  margin-bottom: 5px;
+}
+
+.reporte-anomalias {
+  flex: 0 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+  color: #111111;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.reporte-anomalias-titulo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  box-sizing: border-box;
+  border: 1px solid #111111;
+  padding: 5px 7px;
+  font-size: 10px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.reporte-anomalias-tabla {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.reporte-anomalias-tabla th,
+.reporte-anomalias-tabla td {
+  box-sizing: border-box;
+  border: 1px solid #111111;
+}
+
+.reporte-anomalias-tabla th {
+  height: 30px;
+  padding: 4px 5px;
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1.1;
+  text-align: center;
+}
+
+.reporte-anomalias-tabla td {
+  min-height: 42px;
+  padding: 0;
+  vertical-align: top;
+}
+
+.reporte-anomalias-tabla textarea {
+  width: 100%;
+  height: 41px;
+  min-height: 41px;
+  box-sizing: border-box;
+  border: 0;
+  outline: 0;
+  padding: 5px;
+  background: transparent;
+  color: #111111;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 8px;
+  line-height: 1.2;
+  overflow: hidden;
+  resize: none;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+.reporte-anomalias-tabla textarea:focus {
+  background: #f8fbfd;
+}
+
+.reporte-col-equipo {
+  width: 18%;
+}
+
+.reporte-col-serie {
+  width: 15%;
+}
+
+.reporte-col-inventario {
+  width: 15%;
+}
+
+.reporte-col-observacion {
+  width: 38%;
+}
+
+.reporte-col-estado {
+  width: 14%;
+}
+
+/* ============================================================
+   REGISTRO FOTOGRÁFICO
+   ============================================================ */
+
+.informe-hoja-fotografias {
+  display: flex;
+  flex-direction: column;
+}
+
+.registro-fotografico-encabezado {
+  flex: 0 0 auto;
+  margin-bottom: 5px;
+}
+
+.registro-fotografico {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  width: 100%;
+  box-sizing: border-box;
+  color: #111111;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.registro-fotografico-titulo {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  box-sizing: border-box;
+  border: 1px solid #111111;
+  padding: 5px 7px;
+  font-size: 10px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.registro-fotografico-cuadricula {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  min-height: 0;
+  width: 100%;
+}
+
+.registro-fotografico-celda {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  box-sizing: border-box;
+  border: 1px solid #111111;
+}
+
+.registro-fotografico-imagen {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  padding: 6px;
+  overflow: hidden;
+}
+
+.registro-fotografico-imagen img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.registro-fotografico-imagen img:focus,
+.registro-fotografico-imagen-seleccionada {
+  outline: 2px solid #6e91ad;
+  outline-offset: -2px;
+}
+
+.registro-fotografico-cargar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  min-height: 80px;
+  color: #526274;
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.registro-fotografico-cargar input {
+  display: none;
+}
+
+.registro-fotografico-celda textarea {
+  flex: 0 0 42px;
+  width: 100%;
+  min-height: 42px;
+  box-sizing: border-box;
+  border: 0;
+  border-top: 1px solid #111111;
+  outline: 0;
+  padding: 5px;
+  color: #111111;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 8px;
+  line-height: 1.2;
+  overflow: auto;
+  resize: none;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+.registro-fotografico-celda textarea:focus {
+  background: #f8fbfd;
+}
+
+/* ============================================================
+   ENCABEZADO OFICIAL
+   ============================================================ */
+
+.informe-encabezado {
+  width: 100%;
+
+  border-collapse: collapse;
+  border-spacing: 0;
+
+  table-layout: fixed;
+
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* ============================================================
+   CELDA DEL LOGO
+   ============================================================ */
+
+.encabezado-logo {
+  width: 44%;
+
+  padding: 2px 5px;
+
+  border: 1px solid #111111;
+
+  vertical-align: middle;
+
+  text-align: center;
+}
+
+.encabezado-logo img {
+  display: block;
+
+  width: auto;
+
+  max-width: 100px;
+  max-height: 42px;
+
+  margin: 0 auto;
+}
+
+/* ============================================================
+   COLUMNAS DERECHAS
+   ============================================================ */
+
+.encabezado-label {
+  width: 20%;
+
+  height: 18px;
+
+  padding: 2px 4px;
+
+  border: 1px solid #111111;
+
+  color: #111111;
+
+  font-size: 8px;
+  font-weight: 700;
+
+  line-height: 1;
+
+  vertical-align: middle;
+}
+
+.encabezado-valor {
+  width: 36%;
+
+  height: 18px;
+
+  padding: 2px 4px;
+
+  border: 1px solid #111111;
+
+  color: #111111;
+
+  font-size: 8px;
+
+  line-height: 1;
+
+  vertical-align: middle;
+}
+
+.encabezado-pagina {
+  height: 18px;
+
+  padding: 2px 4px;
+
+  border: 1px solid #111111;
+
+  color: #111111;
+
+  font-size: 8px;
+  font-weight: 700;
+
+  line-height: 1;
+
+  text-align: center;
+
+  vertical-align: middle;
+}
+
+/* ============================================================
+   TÍTULOS DEL ENCABEZADO
+   ============================================================ */
+
+.encabezado-titulo-izquierdo {
+  height: 30px;
+
+  padding: 3px 5px;
+
+  border: 1px solid #111111;
+
+  color: #111111;
+
+  font-size: 8px;
+  font-weight: 700;
+
+  line-height: 1.1;
+
+  vertical-align: middle;
+
+  text-align: left;
+}
+
+.encabezado-titulo-derecho {
+  height: 30px;
+
+  padding: 3px 5px;
+
+  border: 1px solid #111111;
+
+  color: #111111;
+
+  font-size: 8px;
+  font-weight: 700;
+
+  line-height: 1.1;
+
+  vertical-align: middle;
+
+  text-align: center;
+}
+
+/* ============================================================
+   PRIMERA SECCIÓN DEL INFORME
+   ============================================================ */
+
+.informe-primera-seccion {
+  width: 100%;
+
+  margin-top: 5px;
+
+  border-left: 1px solid #111111;
+  border-top: 1px solid #111111;
+
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* ============================================================
+   FILA COMPLETA
+   ============================================================ */
+
+.fila-completa {
+  width: 100%;
+}
+
+.celda-contrato,
+.celda-electrificadora {
+  width: 100%;
+
+  box-sizing: border-box;
+
+  min-height: 28px;
+
+  padding: 6px 7px;
+
+  border-right: 1px solid #111111;
+  border-bottom: 1px solid #111111;
+
+  color: #111111;
+
+  font-size: 9px;
+  font-weight: 700;
+
+  line-height: 1.15;
+
+  text-align: left;
+
+  vertical-align: middle;
+}
+
+.celda-electrificadora {
+  text-align: center;
+
+  min-height: 26px;
+}
+
+/* ============================================================
+   FILA DE 4 COLUMNAS
+
+   Distribución:
+   23% | 29% | 21% | 27%
+   ============================================================ */
+
+.fila-cuatro-columnas {
+  display: grid;
+
+  grid-template-columns:
+    23%
+    29%
+    21%
+    27%;
+
+  width: 100%;
+}
+
+.fila-cuatro-columnas > div {
+  box-sizing: border-box;
+
+  border-right: 1px solid #111111;
+  border-bottom: 1px solid #111111;
+}
+
+/* ============================================================
+   ETIQUETAS
+   ============================================================ */
+
+.celda-label {
+  display: flex;
+
+  align-items: center;
+
+  min-height: 29px;
+
+  padding: 4px 5px;
+
+  color: #111111;
+
+  font-size: 8px;
+  font-weight: 700;
+
+  line-height: 1.1;
+}
+
+.celda-label-doble {
+  min-height: 38px;
+}
+
+/* ============================================================
+   CAMPOS EDITABLES
+   ============================================================ */
+
+.celda-input {
+  min-height: 29px;
+
+  padding: 0;
+
+  background: #ffffff;
+}
+
+.celda-input input {
+  width: 100%;
+  height: 100%;
+
+  min-height: 29px;
+
+  box-sizing: border-box;
+
+  border: 0;
+  outline: 0;
+
+  padding: 4px 6px;
+
+  background: transparent;
+
+  color: #111111;
+
+  font-family: Arial, Helvetica, sans-serif;
+
+  font-size: 9px;
+
+  text-align: left;
+}
+
+.celda-input input:focus {
+  background: #f8fbfd;
+}
+
+/* ============================================================
+   INPUTS DE FECHA
+   ============================================================ */
+
+.celda-input input[type="date"] {
+  font-size: 8px;
+
+  cursor: pointer;
+}
+
+/* ============================================================
+   PERSONAL EJECUTOR
+   ============================================================ */
+
+.fila-personal {
+  display: grid;
+
+  grid-template-columns:
+    23%
+    29%
+    21%
+    27%;
+
+  width: 100%;
+}
+
+.fila-personal > div {
+  box-sizing: border-box;
+
+  min-height: 65px;
+
+  border-right: 1px solid #111111;
+  border-bottom: 1px solid #111111;
+}
+
+/* ============================================================
+   TÍTULO PERSONAL
+   ============================================================ */
+
+.celda-personal-titulo {
+  display: flex;
+
+  align-items: center;
+
+  padding: 5px;
+
+  color: #111111;
+
+  font-size: 8px;
+  font-weight: 700;
+
+  line-height: 1.1;
+}
+
+/* ============================================================
+   LISTAS PERSONAL / CÉDULAS
+   ============================================================ */
+
+.celda-personal-lista,
+.celda-cedula-lista {
+  padding: 4px 5px;
+}
+
+.celda-cedula-titulo {
+  display: flex;
+
+  align-items: center;
+
+  padding: 5px;
+
+  color: #111111;
+
+  font-size: 8px;
+  font-weight: 700;
+}
+
+/* ============================================================
+   LÍNEAS DE PERSONAL
+   ============================================================ */
+
+.personal-linea {
+  display: flex;
+
+  align-items: center;
+
+  height: 19px;
+
+  color: #111111;
+
+  font-size: 8px;
+}
+
+.personal-linea > span {
+  flex: 0 0 auto;
+
+  margin-right: 2px;
+}
+
+.personal-linea input {
+  width: 100%;
+
+  height: 18px;
+
+  box-sizing: border-box;
+
+  border: 0;
+  outline: 0;
+
+  padding: 0 2px;
+
+  background: transparent;
+
+  color: #111111;
+
+  font-family: Arial, Helvetica, sans-serif;
+
+  font-size: 8px;
+}
+
+.personal-linea input:focus {
+  background: #f8fbfd;
+}
+
+/* ============================================================
+   FIRMAS — NOMBRES
+   ============================================================ */
+
+.fila-firmas-nombres {
+  display: grid;
+
+  grid-template-columns:
+    29%
+    31%
+    40%;
+
+  width: 100%;
+}
+
+.bloque-firma-nombre {
+  box-sizing: border-box;
+
+  min-height: 38px;
+
+  padding: 5px 6px;
+
+  border-right: 1px solid #111111;
+  border-bottom: 1px solid #111111;
+}
+
+.firma-nombre-titulo {
+  margin-bottom: 3px;
+
+  color: #111111;
+
+  font-size: 7.5px;
+  font-weight: 700;
+
+  line-height: 1.1;
+}
+
+.bloque-firma-nombre input {
+  width: 100%;
+
+  height: 17px;
+
+  box-sizing: border-box;
+
+  border: 0;
+  outline: 0;
+
+  padding: 0 2px;
+
+  background: transparent;
+
+  color: #111111;
+
+  font-family: Arial, Helvetica, sans-serif;
+
+  font-size: 8px;
+}
+
+.bloque-firma-nombre input:focus {
+  background: #f8fbfd;
+}
+
+/* ============================================================
+   ESPACIOS PARA FIRMA
+   ============================================================ */
+
+.fila-firmas {
+  display: grid;
+
+  grid-template-columns:
+    29%
+    31%
+    40%;
+
+  width: 100%;
+}
+
+.espacio-firma {
+  display: flex;
+
+  align-items: flex-start;
+  justify-content: flex-start;
+
+  box-sizing: border-box;
+
+  min-height: 25px;
+
+  padding: 5px 6px;
+
+  border-right: 1px solid #111111;
+  border-bottom: 1px solid #111111;
+
+  color: #111111;
+
+  font-size: 7.5px;
+  font-weight: 700;
+}
+
+.espacio-firma img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 24px;
+  object-fit: contain;
+  outline: none;
+}
+
+.espacio-firma img:focus {
+  outline: 2px solid #6e91ad;
+  outline-offset: -2px;
+}
+
+.cargar-firma-digital {
+  display: block;
+  width: 100%;
+  cursor: pointer;
+}
+
+.cargar-firma-digital input {
+  display: none;
+}
+
+.informe-hoja-final {
+  display: flex;
+  flex-direction: column;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.bloque-final-informe {
+  width: 100%;
+  margin-top: 7px;
+  border: 1px solid #111111;
+  box-sizing: border-box;
+}
+
+.bloque-final-informe > div {
+  padding: 5px 6px;
+  border-bottom: 1px solid #111111;
+  font-size: 8px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.bloque-final-informe > textarea {
+  display: block;
+  width: 100%;
+  min-height: 78px;
+  box-sizing: border-box;
+  border: 0;
+  outline: 0;
+  padding: 6px;
+  resize: vertical;
+  font:
+    8px/1.25 Arial,
+    Helvetica,
+    sans-serif;
+  overflow-wrap: break-word;
+}
+
+.informe-hoja-final > .bloque-final-informe:last-child {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.informe-hoja-final > .bloque-final-informe:last-child > textarea {
+  flex: 1;
+  min-height: 0;
+  resize: none;
+}
+
+.bloque-tiempos table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.bloque-tiempos th,
+.bloque-tiempos td {
+  border-right: 1px solid #111111;
+  border-bottom: 1px solid #111111;
+  padding: 4px;
+  font-size: 7px;
+  text-align: center;
+  overflow-wrap: break-word;
+}
+
+.bloque-tiempos th:last-child,
+.bloque-tiempos td:last-child {
+  border-right: 0;
+}
+
+.bloque-tiempos th {
+  height: 30px;
+}
+
+.bloque-tiempos td {
+  height: 54px;
+  padding: 0;
+}
+
+.bloque-tiempos td textarea {
+  width: 100%;
+  height: 100%;
+  min-height: 54px;
+  box-sizing: border-box;
+  border: 0;
+  outline: 0;
+  padding: 4px;
+  resize: none;
+  font:
+    7px/1.2 Arial,
+    Helvetica,
+    sans-serif;
+  overflow-wrap: break-word;
+}
+
+/* ============================================================
+   DESCRIPCIÓN DE ACTIVIDAD
+   ============================================================ */
+
+.informe-descripcion-seccion {
+  width: 100%;
+
+  margin-top: 8px;
+
+  box-sizing: border-box;
+
+  border-left: 1px solid #111111;
+  border-top: 1px solid #111111;
+  border-right: 1px solid #111111;
+
+  font-family: Arial, Helvetica, sans-serif;
+
+  background: #ffffff;
+
+  /*
+   * La sección puede crecer.
+   * No se utiliza una altura fija.
+   */
+  height: auto;
+}
+
+/* ============================================================
+   TÍTULO DE DESCRIPCIÓN
+   ============================================================ */
+
+.descripcion-titulo {
+  width: 100%;
+
+  min-height: 25px;
+
+  box-sizing: border-box;
+
+  display: flex;
+
+  align-items: center;
+  justify-content: center;
+
+  padding: 5px 7px;
+
+  border-bottom: 1px solid #111111;
+
+  color: #111111;
+
+  font-size: 8px;
+  font-weight: 700;
+
+  line-height: 1.1;
+
+  text-align: center;
+}
+
+/* ============================================================
+   HERRAMIENTAS DEL EDITOR
+   ============================================================ */
+
+.descripcion-herramientas {
+  display: flex;
+
+  align-items: center;
+
+  flex-wrap: wrap;
+
+  gap: 8px;
+
+  width: 100%;
+
+  min-height: 34px;
+
+  box-sizing: border-box;
+
+  padding: 5px 7px;
+
+  border-bottom: 1px solid #d5dbe1;
+
+  background: #f7f9fb;
+
+  /*
+   * Estas herramientas son propias del editor.
+   * Se ocultan en impresión.
+   */
+}
+
+.descripcion-herramientas-fija {
+  position: static;
+  z-index: auto;
+  flex: 0 1 auto;
+  min-width: 0;
+  width: auto;
+  min-height: 0;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  border: 1px solid #d5dbe1;
+  box-shadow: none;
+  padding: 3px 5px;
+  gap: 5px;
+}
+
+.descripcion-herramientas-fija .descripcion-herramientas-info {
+  flex: 0 0 auto;
+  min-width: auto;
+}
+
+.descripcion-herramientas-fija
+  .descripcion-herramientas-info
+  > span:last-child {
+  display: none;
+}
+
+.descripcion-herramientas-fija .herramientas-imagen {
+  flex-wrap: nowrap;
+}
+
+.btn-herramienta-editor {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 28px;
+  min-height: 26px;
+  padding: 0;
+  box-sizing: border-box;
+  border: 1px solid #c7d1da;
+  border-radius: 5px;
+  background: #ffffff;
+  color: #405466;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 8px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  line-height: 1;
+}
+
+.btn-herramienta-editor:hover {
+  background: #eef4f8;
+  border-color: #9fb3c3;
+}
+
+.tabla-descripcion {
+  width: 100%;
+  margin: 8px 0;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.tabla-descripcion td {
+  min-width: 30px;
+  height: 22px;
+  padding: 4px 6px;
+  border: 1px solid #111111;
+  vertical-align: top;
+}
+
+.descripcion-herramientas-info {
+  display: flex;
+
+  align-items: center;
+
+  gap: 5px;
+
+  flex: 1 1 auto;
+
+  min-width: 150px;
+
+  color: #657382;
+
+  font-size: 8px;
+
+  line-height: 1.2;
+}
+
+.descripcion-herramientas-icono {
+  display: inline-flex;
+
+  align-items: center;
+  justify-content: center;
+
+  width: 18px;
+  height: 18px;
+
+  border-radius: 4px;
+
+  background: #e8edf2;
+
+  color: #42586c;
+
+  font-size: 11px;
+}
+
+/* ============================================================
+   BOTÓN INSERTAR FOTOGRAFÍA
+   ============================================================ */
+
+.btn-anexar-fotos {
+  display: inline-flex;
+
+  align-items: center;
+  justify-content: center;
+
+  flex: 0 0 auto;
+
+  width: fit-content;
+
+  margin: 0;
+
+  padding: 6px 10px;
+
+  box-sizing: border-box;
+
+  border: 1px solid #c7d1da;
+
+  border-radius: 5px;
+
+  background: #ffffff;
+
+  color: #405466;
+
+  font-family: Arial, Helvetica, sans-serif;
+
+  font-size: 8px;
+  font-weight: 700;
+
+  cursor: pointer;
+
+  transition: 0.15s ease;
+}
+
+.btn-anexar-fotos:hover {
+  background: #eef3f7;
+
+  border-color: #738799;
+}
+
+/* ============================================================
+   HERRAMIENTAS DE IMAGEN SELECCIONADA
+   ============================================================ */
+
+.herramientas-imagen {
+  display: flex;
+
+  align-items: center;
+
+  flex-wrap: wrap;
+
+  gap: 6px;
+
+  flex: 1 1 100%;
+
+  padding-top: 2px;
+
+  color: #4e6070;
+
+  font-size: 8px;
+}
+
+.herramientas-imagen > span:first-child {
+  font-weight: 700;
+}
+
+.herramientas-imagen input[type="range"] {
+  width: 100px;
+
+  height: 14px;
+
+  cursor: pointer;
+}
+
+.valor-tamano {
+  min-width: 30px;
+
+  font-weight: 700;
+
+  text-align: center;
+}
+
+.btn-eliminar-imagen-editor {
+  border: 1px solid #d9bcbc;
+
+  border-radius: 4px;
+
+  padding: 4px 7px;
+
+  background: #fff6f6;
+
+  color: #9a4242;
+
+  font-size: 8px;
+  font-weight: 700;
+
+  cursor: pointer;
+}
+
+.btn-eliminar-imagen-editor:hover {
+  background: #ffecec;
+}
+
+/* ============================================================
+   EDITOR TIPO DOCUMENTO
+   ============================================================ */
+
+.descripcion-editor {
+  display: block;
+
+  width: 100%;
+
+  min-height: 170px;
+
+  box-sizing: border-box;
+
+  padding: 8px;
+
+  background: #ffffff;
+
+  color: #111111;
+
+  font-family: Arial, Helvetica, sans-serif;
+
+  font-size: 9px;
+
+  line-height: 1.4;
+
+  text-align: left;
+
+  /*
+   * IMPORTANTE:
+   * No hay scroll interno.
+   */
+  overflow: visible;
+
+  /*
+   * Permite que el contenido crezca verticalmente.
+   */
+  height: auto;
+
+  outline: none;
+
+  white-space: normal;
+
+  word-break: normal;
+
+  overflow-wrap: break-word;
+}
+
+/*
+ * Cada hoja tiene un editor independiente con el fragmento que le
+ * corresponde. El contenido se repagina al escribir o borrar.
+ */
+.informe-hoja > .informe-descripcion-seccion .descripcion-pagina-editor {
+  min-height: 170px;
+  height: auto;
+  max-height: none;
+  overflow: visible;
+}
+
+.informe-hoja-continuacion .descripcion-pagina-editor {
+  min-height: 170px;
+  height: auto;
+  max-height: none;
+  overflow: visible;
+  border: 1px solid #111111;
+  border-top: 0;
+}
+
+.descripcion-pagina-vista {
+  min-height: 170px;
+  height: auto;
+  max-height: none;
+  overflow: visible;
+  border: 1px solid #111111;
+  border-top: 0;
+}
+
+/* ============================================================
+   PLACEHOLDER DEL EDITOR
+   ============================================================ */
+
+.descripcion-editor:empty::before {
+  content: attr(data-placeholder);
+
+  color: #777777;
+
+  pointer-events: none;
+}
+
+/* Marcador transitorio usado para conservar el cursor durante la repaginación. */
+.descripcion-editor [data-caret-marker] {
+  display: inline-block;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  vertical-align: baseline;
+}
+
+/* ============================================================
+   PÁRRAFOS Y BLOQUES DEL EDITOR
+   ============================================================ */
+
+.descripcion-editor p {
+  margin: 0 0 7px;
+
+  padding: 0;
+
+  min-height: 1em;
+}
+
+.descripcion-editor div {
+  min-height: 1em;
+
+  margin: 0 0 4px;
+}
+
+.descripcion-editor br {
+  line-height: 1.4;
+}
+
+.descripcion-editor ul {
+  margin: 6px 0 8px;
+  padding-left: 22px;
+  list-style-type: disc;
+}
+
+.descripcion-editor li {
+  display: list-item;
+  margin: 2px 0;
+  padding-left: 2px;
+}
+
+/* ============================================================
+   FORMATO BÁSICO DEL TEXTO
+   ============================================================ */
+
+.descripcion-editor strong,
+.descripcion-editor b {
+  font-weight: 700;
+}
+
+.descripcion-editor em,
+.descripcion-editor i {
+  font-style: italic;
+}
+
+.descripcion-editor u {
+  text-decoration: underline;
+}
+
+/* ============================================================
+   IMÁGENES INSERTADAS EN EL EDITOR
+   ============================================================ */
+
+.descripcion-editor img[data-sigpas-image="true"] {
+  display: block;
+
+  width: 60%;
+
+  height: auto;
+
+  max-width: 100%;
+
+  min-width: 10%;
+
+  margin: 10px auto;
+
+  box-sizing: border-box;
+
+  object-fit: contain;
+
+  cursor: pointer;
+
+  /*
+   * Evita que una imagen se reduzca automáticamente
+   * por reglas del navegador.
+   */
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   IMAGEN SELECCIONADA
+   ============================================================ */
+
+.descripcion-editor img[data-sigpas-image="true"]:focus {
+  outline: 2px solid #6e91ad;
+
+  outline-offset: 2px;
+}
+
+/*
+ * Cuando el navegador permite selección directa de imágenes
+ * dentro de contenteditable, se proporciona una indicación
+ * visual clara al pasar el mouse.
+ */
+.descripcion-editor img[data-sigpas-image="true"]:hover {
+  outline: 1px dashed #8ba2b5;
+
+  outline-offset: 2px;
+}
+
+/* ============================================================
+   AYUDA DEL EDITOR
+   ============================================================ */
+
+.descripcion-ayuda-editor {
+  display: flex;
+
+  justify-content: space-between;
+
+  flex-wrap: wrap;
+
+  gap: 8px;
+
+  width: 100%;
+
+  box-sizing: border-box;
+
+  padding: 5px 7px;
+
+  border-top: 1px solid #edf0f3;
+
+  background: #fafbfc;
+
+  color: #7a8793;
+
+  font-size: 7.5px;
+
+  line-height: 1.25;
+}
+
+/* ============================================================
+   FOTOGRAFÍAS ANTIGUAS
+   COMPATIBILIDAD CON INFORMES ANTERIORES
+   ============================================================ */
+
+.fotos-antiguas-compatibilidad {
+  width: 100%;
+
+  margin-top: 10px;
+
+  box-sizing: border-box;
+
+  border: 1px solid #111111;
+
+  background: #ffffff;
+
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.fotos-antiguas-titulo {
+  width: 100%;
+
+  box-sizing: border-box;
+
+  padding: 6px 7px;
+
+  border-bottom: 1px solid #111111;
+
+  color: #111111;
+
+  font-size: 8px;
+  font-weight: 700;
+
+  text-align: center;
+}
+
+.fotos-antiguas-lista {
+  display: grid;
+
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+
+  gap: 10px;
+
+  padding: 8px;
+}
+
+.foto-antigua {
+  position: relative;
+
+  width: 100%;
+
+  box-sizing: border-box;
+
+  border: 1px solid #cfd6dd;
+
+  background: #ffffff;
+
+  overflow: hidden;
+}
+
+.foto-antigua img {
+  display: block;
+
+  width: 100%;
+  height: auto;
+
+  max-height: 190px;
+
+  object-fit: contain;
+
+  background: #f7f8fa;
+}
+
+/* ============================================================
+   BOTÓN ELIMINAR FOTOGRAFÍA
+   ============================================================ */
+
+.btn-eliminar-foto {
+  position: absolute;
+
+  top: 5px;
+  right: 5px;
+
+  display: flex;
+
+  align-items: center;
+  justify-content: center;
+
+  width: 22px;
+  height: 22px;
+
+  padding: 0;
+
+  border: 0;
+
+  border-radius: 50%;
+
+  background: rgba(160, 52, 52, 0.92);
+
+  color: #ffffff;
+
+  font-size: 15px;
+  font-weight: 700;
+
+  line-height: 1;
+
+  cursor: pointer;
+
+  transition: 0.15s ease;
+}
+
+.btn-eliminar-foto:hover {
+  background: #8d2d2d;
+
+  transform: scale(1.05);
+}
+
+/* ============================================================
+   ÁREA BLANCA RESTANTE
+   ============================================================ */
+
+.informe-area-blanca {
+  flex: 1;
+
+  min-height: 50px;
+
+  background: #ffffff;
+}
+
+/* ============================================================
+   CONTENIDO DE PÁGINAS ADICIONALES
+   ============================================================ */
+
+.informe-contenido-pagina {
+  width: 100%;
+
+  box-sizing: border-box;
+
+  font-family: Arial, Helvetica, sans-serif;
+
+  color: #111111;
+}
+
+.informe-contenido-pagina-texto {
+  width: 100%;
+
+  box-sizing: border-box;
+
+  padding: 8px 0;
+
+  color: #111111;
+
+  font-family: Arial, Helvetica, sans-serif;
+
+  font-size: 9px;
+
+  line-height: 1.4;
+
+  white-space: pre-wrap;
+
+  overflow-wrap: break-word;
+}
+
+/* ============================================================
+   BLOQUES DE FOTOGRAFÍAS EN PÁGINAS ADICIONALES
+   ============================================================ */
+
+.informe-fotos-pagina {
+  display: grid;
+
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+
+  gap: 12px;
+
+  width: 100%;
+
+  box-sizing: border-box;
+
+  margin-top: 8px;
+}
+
+.informe-fotos-pagina .foto-actividad {
+  break-inside: avoid;
+
+  page-break-inside: avoid;
+}
+
+.informe-fotos-pagina .foto-actividad img {
+  max-height: 220px;
+}
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+
+@media (max-width: 1100px) {
+  .informes-filtros {
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-areas:
+      "buscar buscar"
+      "anio mes"
+      "semana subestacion"
+      "cuadrilla cuadrilla"
+      "limpiar limpiar";
+  }
+
+  .btn-limpiar-informes {
+    justify-self: start;
+    padding: 0 30px;
+  }
+}
+
+@media (max-width: 900px) {
+  .informes-contenedor {
+    padding: 20px 16px 40px;
+  }
+
+  .informes-resumen {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .informes-pagina-header {
+    align-items: flex-start;
+
+    flex-direction: column;
+  }
+
+  .informe-documento-contenedor {
+    align-items: flex-start;
+
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+}
+
+@media (max-width: 700px) {
+  .informes-filtros {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "buscar"
+      "anio"
+      "mes"
+      "semana"
+      "subestacion"
+      "cuadrilla"
+      "limpiar";
+  }
+
+  .btn-limpiar-informes {
+    width: 100%;
+    justify-self: stretch;
+  }
+}
+
+@media (max-width: 600px) {
+  .informes-resumen {
+    grid-template-columns: 1fr;
+  }
+
+  .informes-editor-barra {
+    padding: 6px 12px;
+
+    gap: 8px;
+  }
+
+  .informes-editor-titulo {
+    flex: 1 1 auto;
+    justify-content: flex-start;
+  }
+
+  .informes-editor-barra .btn-editor-guardar {
+    margin-left: 0;
+  }
+
+  .informes-editor-titulo span {
+    display: none;
+  }
+
+  .fotos-antiguas-lista,
+  .informe-fotos-pagina {
+    grid-template-columns: 1fr;
+  }
+
+  .descripcion-herramientas {
+    align-items: flex-start;
+  }
+
+  .descripcion-herramientas-info {
+    flex-basis: 100%;
+  }
+
+  .descripcion-herramientas-fija .descripcion-herramientas-info {
+    flex-basis: auto;
+  }
+
+  .descripcion-ayuda-editor {
+    flex-direction: column;
+  }
+}
+
+/* ============================================================
+   IMPRESIÓN / PDF
+   ============================================================ */
+
+@page {
+  size: Letter portrait;
+
+  margin: 0;
+}
+
+@page informe-carta {
+  size: Letter portrait;
+  margin: 0;
+}
+
+@media print {
+  html,
+  body {
+    width: 21.59cm;
+
+    margin: 0;
+    padding: 0;
+
+    background: #ffffff;
+  }
+
+  #root > * {
+    visibility: hidden !important;
+  }
+
+  .informes-editor,
+  .informes-editor * {
+    visibility: visible !important;
+  }
+
+  /* ==========================================================
+     OCULTAR HERRAMIENTAS DEL EDITOR
+     ========================================================== */
+
+  .informes-editor-barra {
+    display: none !important;
+  }
+
+  .descripcion-herramientas {
+    display: none !important;
+  }
+
+  .descripcion-ayuda-editor {
+    display: none !important;
+  }
+
+  .btn-anexar-fotos,
+  .btn-eliminar-foto,
+  .btn-eliminar-imagen-editor,
+  .registro-fotografico-cargar,
+  .cargar-firma-digital {
+    display: none !important;
+  }
+
+  /* ==========================================================
+     CONTENEDOR
+     ========================================================== */
+
+  .informes-editor {
+    display: block !important;
+    width: 21.59cm;
+
+    margin: 0;
+    padding: 0;
+
+    background: #ffffff;
+  }
+
+  .informe-documento-contenedor {
+    display: block;
+
+    width: 21.59cm;
+    min-height: 27.94cm;
+
+    margin: 0;
+    padding: 0;
+
+    overflow: visible;
+  }
+
+  /* ==========================================================
+     HOJA CARTA
+     ========================================================== */
+
+  .informe-hoja,
+  .informe-hoja-pagina {
+    page: informe-carta;
+    width: 21.59cm;
+    min-width: 21.59cm;
+
+    height: 27.94cm;
+    max-height: 27.94cm;
+    min-height: 27.94cm;
+
+    margin: 0;
+
+    padding-top: 2.5cm;
+    padding-right: 2cm;
+    padding-bottom: 2.5cm;
+    padding-left: 2cm;
+
+    box-sizing: border-box;
+
+    border: 0;
+
+    box-shadow: none;
+
+    overflow: hidden;
+
+    page-break-after: always;
+
+    break-after: page;
+  }
+
+  .informe-hoja-anomalias {
+    page: informe-carta;
+    width: 27.94cm;
+    min-width: 27.94cm;
+    height: 21.59cm;
+    min-height: 21.59cm;
+    max-height: 21.59cm;
+    margin: 0;
+    padding: 1.2cm 1.3cm;
+    box-sizing: border-box;
+    transform: rotate(90deg);
+    transform-origin: center center;
+    overflow: visible;
+  }
+
+  .reporte-anomalias-encabezado {
+    display: table;
+    margin-bottom: 5px;
+  }
+
+  .informe-hoja-anomalias .reporte-anomalias-tabla th {
+    height: 30px;
+  }
+
+  .informe-hoja-anomalias .reporte-anomalias-tabla td {
+    min-height: 42px;
+  }
+
+  /* ==========================================================
+     DESCRIPCIÓN
+     ========================================================== */
+
+  .informe-descripcion-seccion {
+    width: 100%;
+
+    margin-top: 8px;
+
+    break-inside: auto;
+
+    page-break-inside: auto;
+  }
+
+  .descripcion-titulo {
+    break-after: avoid;
+
+    page-break-after: avoid;
+  }
+
+  .descripcion-editor {
+    min-height: 0;
+
+    height: auto;
+
+    padding: 8px 0;
+
+    overflow: visible;
+
+    break-inside: auto;
+
+    page-break-inside: auto;
+
+    /*
+     * El navegador puede dividir el contenido de texto
+     * entre páginas al imprimir.
+     */
+  }
+
+  /* ==========================================================
+     TEXTO DEL EDITOR
+     ========================================================== */
+
+  .descripcion-editor p,
+  .descripcion-editor div {
+    break-inside: auto;
+
+    page-break-inside: auto;
+  }
+
+  /* ==========================================================
+     IMÁGENES
+     ========================================================== */
+
+  .descripcion-editor img[data-sigpas-image="true"] {
+    max-width: 100%;
+
+    height: auto;
+
+    break-inside: avoid;
+
+    page-break-inside: avoid;
+
+    break-before: auto;
+
+    page-break-before: auto;
+
+    break-after: auto;
+
+    page-break-after: auto;
+
+    outline: none !important;
+  }
+
+  /* ==========================================================
+     COMPATIBILIDAD FOTOGRAFÍAS ANTIGUAS
+     ========================================================== */
+
+  .fotos-antiguas-compatibilidad {
+    break-inside: auto;
+
+    page-break-inside: auto;
+  }
+
+  .foto-antigua {
+    break-inside: avoid;
+
+    page-break-inside: avoid;
+  }
+
+  /* ==========================================================
+     PÁGINAS ADICIONALES
+     ========================================================== */
+
+  .informe-contenido-pagina {
+    break-inside: auto;
+
+    page-break-inside: auto;
+  }
+
+  .informe-contenido-pagina-texto {
+    break-inside: auto;
+
+    page-break-inside: auto;
+  }
+
+  /* ==========================================================
+     INPUTS
+     ========================================================== */
+
+  input {
+    color: #111111 !important;
+  }
+
+  input::placeholder {
+    color: transparent !important;
+  }
+
+  textarea {
+    color: #111111 !important;
+  }
+
+  textarea::placeholder {
+    color: transparent !important;
+  }
+
+  /* ==========================================================
+     FONDOS
+     ========================================================== */
+
+  .descripcion-editor,
+  .informe-descripcion-seccion,
+  .informe-hoja,
+  .informe-hoja-pagina {
+    background: #ffffff !important;
+  }
+}

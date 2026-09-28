@@ -1,0 +1,143 @@
+/* =========================================================
+   SIGPAS · LOGIN
+   ========================================================= */
+
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: #f7f8f9;
+  box-sizing: border-box;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 380px;
+  padding: 32px 30px 26px;
+  background: #ffffff;
+  border: 1px solid #e2e6e4;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(20, 40, 30, 0.08);
+  box-sizing: border-box;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.login-logo {
+  width: 78px;
+  height: auto;
+  margin-bottom: 12px;
+}
+
+.login-card h1 {
+  margin: 0 0 4px;
+  color: #2648af;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.login-subtitulo {
+  margin: 0 0 22px;
+  color: #747b80;
+  font-size: 12px;
+}
+
+.login-form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.login-campo {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  text-align: left;
+}
+
+.login-campo span {
+  color: #555b61;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.login-campo input {
+  width: 100%;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid #dfe2e5;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #454a50;
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+  box-sizing: border-box;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.login-campo input:focus {
+  border-color: #1d6f42;
+  box-shadow: 0 0 0 3px rgba(29, 111, 66, 0.08);
+}
+
+.login-error {
+  padding: 8px 10px;
+  background: #fde9e7;
+  border-radius: 6px;
+  color: #b23b2f;
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.login-btn {
+  height: 40px;
+  margin-top: 4px;
+  border: none;
+  border-radius: 7px;
+  background: #1d6f42;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    transform 0.15s ease;
+}
+
+.login-btn:hover:not(:disabled) {
+  background: #185f38;
+}
+
+.login-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.login-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.login-volver {
+  margin-top: 20px;
+  color: #747b80;
+  font-size: 11px;
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.login-volver:hover {
+  color: #2648af;
+}

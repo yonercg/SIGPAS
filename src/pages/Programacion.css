@@ -1,0 +1,1505 @@
+/* ================================================= */
+/* PÁGINA PROGRAMACIÓN */
+/* ================================================= */
+
+.programacion {
+  width: 100%;
+  padding: 22px 24px 30px;
+  box-sizing: border-box;
+}
+
+/* ================================================= */
+/* RECUADRO DEL TÍTULO */
+/* ================================================= */
+
+.programacion-title-card {
+  width: 100%;
+  margin-bottom: 18px;
+  background: #ffffff;
+  border: 1px solid #e2e6e4;
+  border-radius: 10px;
+  box-sizing: border-box;
+  box-shadow: 0 2px 8px rgba(20, 40, 30, 0.035);
+}
+
+.programacion-title-card .programacion-header {
+  margin-bottom: 0;
+  padding: 16px 18px;
+}
+
+/* ================================================= */
+/* ENCABEZADO */
+/* ================================================= */
+
+.programacion-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 18px;
+}
+
+.programacion-header h1 {
+  margin: 0 0 5px;
+  color: #2648af;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.programacion-header p {
+  margin: 0;
+  color: #747b80;
+  font-size: 12px;
+  line-height: 1;
+}
+
+/* ================================================= */
+/* BOTÓN NUEVA ACTIVIDAD */
+/* ================================================= */
+
+.new-activity-button {
+  width: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  padding: 0 35px;
+  background: #2648af;
+  border: none;
+  border-radius: 6px;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 900;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: 0 2px 5px rgba(29, 111, 66, 0.14);
+  transition:
+    background 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
+}
+
+.new-activity-button:hover {
+  background: #2648af;
+  box-shadow: 0 4px 9px rgba(38, 72, 175, 0.18);
+}
+
+.new-activity-button:active {
+  transform: scale(0.97);
+}
+
+/* ================================================= */
+/* SELECTOR DE SEMANA */
+/* ================================================= */
+
+.week-selector {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  width: 100%;
+  min-height: 58px;
+  padding: 9px 18px;
+  margin: 0 auto 18px;
+  box-sizing: border-box;
+  background: #ffffff;
+  border: 1px solid #e2e6e4;
+  border-radius: 9px;
+  box-shadow: 0 2px 7px rgba(20, 40, 30, 0.025);
+}
+
+/* ================================================= */
+/* BOTONES DE NAVEGACIÓN */
+/* ================================================= */
+
+.week-navigation {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 31px;
+  height: 31px;
+  padding: 0;
+  background: #f7f9f8;
+  border: 1px solid #dfe4e1;
+  border-radius: 6px;
+  color: #596067;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.week-navigation:hover {
+  background: #eef6f1;
+  border-color: #2648af;
+  color: #2648af;
+}
+
+.week-navigation:active {
+  transform: scale(0.95);
+}
+
+/* ================================================= */
+/* INFORMACIÓN DE LA SEMANA */
+/* ================================================= */
+
+.selected-week {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 185px;
+  text-align: center;
+}
+
+.selected-week span {
+  display: block;
+  margin-bottom: 3px;
+  color: #363c41;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.selected-week strong {
+  color: #2648af;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.selected-week small {
+  display: block;
+  margin-top: 3px;
+  color: #858c91;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+/* ================================================= */
+/* DISPONIBILIDAD */
+/* ================================================= */
+
+.availability-card {
+  padding: 15px;
+  margin-bottom: 14px;
+  background: #ffffff;
+  border: 1px solid #e2e6e4;
+  border-radius: 9px;
+  box-sizing: border-box;
+  box-shadow: 0 2px 7px rgba(20, 40, 30, 0.025);
+}
+
+/* ================================================= */
+/* ENCABEZADO DISPONIBILIDAD */
+/* ================================================= */
+
+.availability-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 13px;
+}
+
+.availability-label {
+  display: block;
+  margin-bottom: 4px;
+  color: #9aa0a6;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.availability-header h2 {
+  margin: 0;
+  color: #30353a;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+/* ================================================= */
+/* ACCIONES DISPONIBILIDAD */
+/* ================================================= */
+
+.availability-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.availability-type {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 9px;
+  border-radius: 12px;
+  font-size: 9px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.availability-type.rotation {
+  background: #e8f4ed;
+  color: #1b683c;
+}
+
+.availability-type.manual {
+  background: #fff5dc;
+  color: #8a6900;
+}
+
+/* ================================================= */
+/* BOTÓN MODIFICAR DISPONIBILIDAD */
+/* ================================================= */
+
+.edit-availability-button {
+  height: 30px;
+  padding: 0 10px;
+  background: #ffffff;
+  border: 1px solid #d7dcdf;
+  border-radius: 5px;
+  color: #555c62;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.edit-availability-button:hover {
+  background: #f1f7f3;
+  border-color: #1d6f42;
+  color: #1d6f42;
+}
+
+.edit-availability-button:active {
+  transform: scale(0.97);
+}
+
+/* ================================================= */
+/* DETALLES DISPONIBILIDAD */
+/* ================================================= */
+
+.availability-details {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.availability-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 48px;
+  padding: 10px;
+  background: #f7f9f8;
+  border: 1px solid #edf0ee;
+  border-radius: 6px;
+  box-sizing: border-box;
+}
+
+.availability-detail span {
+  color: #969da2;
+  font-size: 8px;
+  font-weight: 500;
+}
+
+.availability-detail strong {
+  color: #454a50;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* ================================================= */
+/* CAMBIO DE DISPONIBILIDAD */
+/* ================================================= */
+
+.availability-change {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 11px;
+  padding: 9px 11px;
+  background: #f5f8fc;
+  border-left: 3px solid #527db8;
+  border-radius: 5px;
+  color: #527db8;
+  font-size: 10px;
+}
+
+/* ================================================= */
+/* FORMULARIOS */
+/* ================================================= */
+
+.availability-form-card,
+.new-activity-card {
+  padding: 20px;
+  margin-bottom: 16px;
+  background: #ffffff;
+  border: 1px solid #e2e6e4;
+  border-radius: 9px;
+  box-sizing: border-box;
+  box-shadow: 0 2px 8px rgba(20, 40, 30, 0.025);
+}
+
+/* ================================================= */
+/* CABECERA FORMULARIOS */
+/* ================================================= */
+
+.availability-form-header,
+.new-activity-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.availability-form-header span,
+.new-activity-header span {
+  display: block;
+  color: #1d6f42;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+}
+
+.availability-form-header h2,
+.new-activity-header h2 {
+  margin: 5px 0 0;
+  color: #30353a;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+/* ================================================= */
+/* CERRAR FORMULARIO */
+/* ================================================= */
+
+.close-form-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: #f7f8f9;
+  border: 1px solid #e1e4e6;
+  border-radius: 6px;
+  color: #596067;
+  font-size: 18px;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.close-form-button:hover {
+  background: #eef5f1;
+  border-color: #1d6f42;
+  color: #1d6f42;
+}
+
+/* ================================================= */
+/* GRID FORMULARIOS */
+/* ================================================= */
+
+.availability-form-grid,
+.new-activity-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 17px;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-field-full {
+  grid-column: 1 / -1;
+}
+
+.form-field label {
+  color: #555b61;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.form-field input,
+.form-field select,
+.form-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0 10px;
+  background: #ffffff;
+  border: 1px solid #dfe2e5;
+  border-radius: 6px;
+  color: #454a50;
+  font-family: inherit;
+  font-size: 11px;
+  outline: none;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.form-field input {
+  height: 35px;
+}
+
+.form-field select {
+  height: 35px;
+  cursor: pointer;
+}
+
+.form-field textarea {
+  min-height: 80px;
+  padding: 9px 10px;
+  resize: vertical;
+}
+
+.form-field input::placeholder,
+.form-field textarea::placeholder {
+  color: #a1a6ab;
+}
+
+.form-field input:disabled,
+.form-field select:disabled {
+  background: #f7f8f9;
+  color: #8b9196;
+}
+
+.form-field input:focus,
+.form-field select:focus,
+.form-field textarea:focus {
+  border-color: #1d6f42;
+  box-shadow: 0 0 0 2px rgba(29, 111, 66, 0.07);
+}
+
+.form-field small {
+  color: #9aa0a6;
+  font-size: 9px;
+}
+
+/* ================================================= */
+/* BOTONES FORMULARIOS */
+/* ================================================= */
+
+.availability-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+  padding-top: 15px;
+  border-top: 1px solid #eceeef;
+}
+
+.cancel-button {
+  height: 32px;
+  padding: 0 13px;
+  background: #ffffff;
+  border: 1px solid #d7dcdf;
+  border-radius: 5px;
+  color: #596067;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.cancel-button:hover {
+  background: #f5f6f7;
+  border-color: #cdd2d5;
+}
+
+.save-availability-button {
+  height: 32px;
+  padding: 0 14px;
+  background: #1d6f42;
+  border: none;
+  border-radius: 5px;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    transform 0.15s ease;
+}
+
+.save-availability-button:hover {
+  background: #155a35;
+}
+
+.save-availability-button:active {
+  transform: scale(0.97);
+}
+
+/* ================================================= */
+/* FILTROS */
+/* ================================================= */
+
+.programacion-filters {
+  display: grid;
+  grid-template-columns: minmax(280px, 1.8fr) repeat(3, minmax(150px, 1fr));
+  grid-template-rows: repeat(2, 1fr);
+  gap: 8px;
+  align-items: end;
+  padding: 11px;
+  margin-bottom: 14px;
+  background: #ffffff;
+  border: 1px solid #e2e6e4;
+  border-radius: 9px;
+  box-sizing: border-box;
+  box-shadow: 0 2px 7px rgba(20, 40, 30, 0.025);
+}
+
+/* ================================================= */
+/* BUSCADOR */
+/* ================================================= */
+
+.filter-search-group {
+  grid-column: 1;
+  grid-row: 1 / 3;
+  align-self: stretch;
+  justify-content: center;
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.filter-group label {
+  color: #666c72;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.filter-group input,
+.filter-group select {
+  width: 100%;
+  height: 35px;
+  box-sizing: border-box;
+  padding: 0 10px;
+  background: #ffffff;
+  border: 1px solid #dfe2e5;
+  border-radius: 6px;
+  color: #454a50;
+  font-family: inherit;
+  font-size: 11px;
+  outline: none;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.filter-group input::placeholder {
+  color: #a1a6ab;
+}
+
+.filter-group select {
+  cursor: pointer;
+}
+
+.filter-group input:focus,
+.filter-group select:focus {
+  border-color: #1d6f42;
+  box-shadow: 0 0 0 2px rgba(29, 111, 66, 0.07);
+}
+
+/* ================================================= */
+/* POSICIONES DE FILTROS */
+/* ================================================= */
+
+.programacion-filters .filter-group:nth-child(2) {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.programacion-filters .filter-group:nth-child(3) {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+.programacion-filters .filter-group:nth-child(4) {
+  grid-column: 4;
+  grid-row: 1;
+}
+
+.programacion-filters .filter-group:nth-child(5) {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.programacion-filters .filter-group:nth-child(6) {
+  grid-column: 3;
+  grid-row: 2;
+}
+
+.programacion-filters .filter-clear-button {
+  grid-column: 4;
+  grid-row: 2;
+}
+
+/* ================================================= */
+/* BOTÓN LIMPIAR FILTROS */
+/* ================================================= */
+
+.programacion-filters .filter-clear-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: stretch;
+  width: 100%;
+  height: 35px;
+  padding: 0 10px;
+  margin: 0;
+  background: #ffffff;
+  border: 1px solid #d7dcdf;
+  border-radius: 6px;
+  color: #666c72;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  box-sizing: border-box;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.programacion-filters .filter-clear-button:hover {
+  background: #f5f7f6;
+  border-color: #bfc6ca;
+  color: #3f464b;
+}
+
+.programacion-filters .filter-clear-button:active {
+  transform: scale(0.98);
+}
+
+/* ================================================= */
+/* RESUMEN DE ACTIVIDADES */
+/* ================================================= */
+
+.activity-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.activity-summary-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 64px;
+  padding: 12px 15px;
+  box-sizing: border-box;
+  background: #ffffff;
+  border: 1px solid #e2e6e4;
+  border-radius: 9px;
+  box-shadow: 0 2px 7px rgba(20, 40, 30, 0.025);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
+}
+
+.activity-summary-item:hover {
+  border-color: #d5ddd8;
+  box-shadow: 0 5px 13px rgba(20, 40, 30, 0.06);
+  transform: translateY(-1px);
+}
+
+.activity-summary-item span {
+  color: #454a50;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.activity-summary-item strong {
+  color: #1d6f42;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+/* ================================================= */
+/* TABLA */
+/* ================================================= */
+
+.programacion-card {
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid #e2e6e4;
+  border-radius: 9px;
+  box-shadow: 0 2px 8px rgba(20, 40, 30, 0.025);
+}
+
+.programacion-card-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 14px 15px;
+  border-bottom: 1px solid #e6e9e7;
+  background: #ffffff;
+}
+
+.programacion-card-header h2 {
+  margin: 0 0 4px;
+  color: #30353a;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.programacion-card-header p {
+  margin: 0;
+  color: #92979c;
+  font-size: 10px;
+}
+
+/* ================================================= */
+/* CONTENEDOR TABLA */
+/* ================================================= */
+
+.programacion-table-container {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.programacion-table {
+  width: 100%;
+  min-width: 1450px;
+  border-collapse: collapse;
+  font-size: 11px;
+  text-align: center;
+}
+
+.programacion-table thead {
+  background: #f5f7f6;
+}
+
+.programacion-table th {
+  padding: 10px 11px;
+  color: #62696e;
+  font-size: 10px;
+  font-weight: 700;
+  text-align: center;
+  border-bottom: 1px solid #e1e5e3;
+  white-space: nowrap;
+}
+
+.programacion-table td {
+  padding: 10px 11px;
+  color: #555b61;
+  font-size: 11px;
+  border-bottom: 1px solid #f0f2f1;
+  vertical-align: middle;
+}
+
+.programacion-table tbody tr {
+  transition: background 0.12s ease;
+}
+
+.programacion-table tbody tr:hover {
+  background: #fafcfb;
+}
+
+.programacion-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* ================================================= */
+/* NOMBRE ACTIVIDAD */
+/* ================================================= */
+
+.programacion-activity-name {
+  min-width: 200px;
+  color: #363b40 !important;
+  font-weight: 600;
+}
+
+/* ================================================= */
+/* TIPO DE ACTIVIDAD */
+/* ================================================= */
+
+.programacion-type {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 175px;
+  padding: 4px 8px;
+  border-radius: 10px;
+  background: #f2f5f3;
+  border: 1px solid #dfe5e1;
+  color: #4d5a52;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: center;
+  white-space: normal;
+}
+
+.programacion-type.type-fuera-de-pm {
+  background: #fff5dc;
+  border-color: #ead9a9;
+  color: #8a6900;
+}
+
+.programacion-type.type-inspeccion,
+.programacion-type.type-baterias,
+.programacion-type.type-termografica-coronometria,
+.programacion-type.type-aceites,
+.programacion-type.type-paso-y-contacto,
+.programacion-type.type-podas,
+.programacion-type.type-aires,
+.programacion-type.type-maniobras,
+.programacion-type.type-consignas {
+  background: #eef6f1;
+  border-color: #d6e7dc;
+  color: #1d6f42;
+}
+
+.programacion-type.type-sin-tipo {
+  background: #f5f6f7;
+  border-color: #e1e4e6;
+  color: #92979c;
+}
+
+/* ================================================= */
+/* ESTADOS */
+/* ================================================= */
+
+.programacion-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 9px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.programacion-status-select {
+  width: auto;
+  min-width: 115px;
+  height: 27px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.programacion-status-select:focus {
+  outline: none;
+  border-color: #1d6f42;
+  box-shadow: 0 0 0 2px rgba(29, 111, 66, 0.07);
+}
+
+.status-pendiente {
+  background: #fff5dc;
+  color: #8a6900;
+}
+
+.status-reprogramada {
+  background: #e8f0fc;
+  color: #315f9e;
+}
+
+.status-ejecutada {
+  background: #e6f4eb;
+  color: #1b683c;
+}
+
+.status-emergencia {
+  background: #fde9e7;
+  color: #b23b2f;
+}
+
+/* ================================================= */
+/* ACCIONES */
+/* ================================================= */
+
+.activity-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.activity-edit-button,
+.activity-duplicate-button,
+.activity-delete-button {
+  height: 27px;
+  padding: 0 9px;
+  box-sizing: border-box;
+  border-radius: 5px;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    transform 0.15s ease;
+}
+
+/* MODIFICAR */
+
+.activity-edit-button {
+  background: #ffffff;
+  border: 1px solid #d7dcdf;
+  color: #555c62;
+}
+
+.activity-edit-button:hover {
+  background: #f1f7f3;
+  border-color: #1d6f42;
+  color: #1d6f42;
+}
+
+/* DUPLICAR */
+
+.activity-duplicate-button {
+  background: #ffffff;
+  border: 1px solid #d7dcdf;
+  color: #555c62;
+}
+
+.activity-duplicate-button:hover {
+  background: #f1f7f3;
+  border-color: #527db8;
+  color: #315f9e;
+}
+
+/* ELIMINAR */
+
+.activity-delete-button {
+  background: #ffffff;
+  border: 1px solid #e2caca;
+  color: #c44b4b;
+}
+
+.activity-delete-button:hover {
+  background: #fff4f4;
+  border-color: #c44b4b;
+  color: #b23b3b;
+}
+
+/* EFECTO AL PRESIONAR */
+
+.activity-edit-button:active,
+.activity-duplicate-button:active,
+.activity-delete-button:active {
+  transform: scale(0.97);
+}
+
+/* ================================================= */
+/* SIN ACTIVIDADES */
+/* ================================================= */
+
+.no-activities {
+  padding: 30px 15px !important;
+  color: #999 !important;
+  text-align: center;
+}
+
+/* ================================================= */
+/* RESPONSIVE */
+/* ================================================= */
+
+@media (max-width: 1100px) {
+  .activity-summary {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .availability-details {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .availability-form-grid,
+  .new-activity-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .programacion-filters {
+    grid-template-columns: minmax(230px, 1.5fr) repeat(2, 1fr);
+    grid-template-rows: repeat(3, auto);
+  }
+
+  .filter-search-group {
+    grid-column: 1;
+    grid-row: 1 / 4;
+  }
+
+  .programacion-filters .filter-group:nth-child(2) {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .programacion-filters .filter-group:nth-child(3) {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .programacion-filters .filter-group:nth-child(4) {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .programacion-filters .filter-group:nth-child(5) {
+    grid-column: 3;
+    grid-row: 2;
+  }
+
+  .programacion-filters .filter-group:nth-child(6) {
+    grid-column: 2;
+    grid-row: 3;
+  }
+
+  .programacion-filters .filter-clear-button {
+    grid-column: 3;
+    grid-row: 3;
+  }
+}
+
+/* ================================================= */
+/* MÓVIL */
+/* ================================================= */
+
+@media (max-width: 700px) {
+  .programacion {
+    padding: 16px;
+  }
+
+  .programacion-title-card .programacion-header {
+    padding: 15px;
+  }
+
+  .programacion-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .programacion-header h1 {
+    font-size: 22px;
+  }
+
+  .new-activity-button {
+    width: 100%;
+  }
+
+  .week-selector {
+    gap: 12px;
+  }
+
+  .selected-week {
+    min-width: 145px;
+  }
+
+  .availability-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .availability-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .availability-details,
+  .availability-form-grid,
+  .new-activity-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .programacion-filters {
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+  }
+
+  .filter-search-group {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .programacion-filters .filter-group:nth-child(2),
+  .programacion-filters .filter-group:nth-child(3),
+  .programacion-filters .filter-group:nth-child(4),
+  .programacion-filters .filter-group:nth-child(5),
+  .programacion-filters .filter-group:nth-child(6),
+  .programacion-filters .filter-clear-button {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .activity-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .activity-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* ================================================= */
+/* MODAL DETALLE DE ACTIVIDAD REPROGRAMADA */
+/* ================================================= */
+
+.activity-detail-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.55);
+  animation: activityDetailOverlayEntrada 0.18s ease;
+}
+
+/* ================================================= */
+/* VENTANA DEL DETALLE */
+/* ================================================= */
+
+.activity-detail-modal {
+  width: min(560px, 100%);
+  max-height: 88vh;
+  overflow-y: auto;
+  background: #ffffff;
+  border: 1px solid #e5e8ea;
+  border-radius: 10px;
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.22);
+  animation: activityDetailModalEntrada 0.2s ease;
+}
+
+/* ================================================= */
+/* ENCABEZADO MODAL */
+/* ================================================= */
+
+.activity-detail-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 15px;
+  padding: 16px 18px 14px;
+  border-bottom: 1px solid #e8eaec;
+}
+
+.activity-detail-header span {
+  display: block;
+  margin-bottom: 4px;
+  color: #1d6f42;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+}
+
+.activity-detail-header h2 {
+  margin: 0;
+  color: #30353a;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+/* ================================================= */
+/* BOTÓN CERRAR MODAL */
+/* ================================================= */
+
+.activity-detail-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: #f7f8f9;
+  border: 1px solid #e1e4e6;
+  border-radius: 6px;
+  color: #596067;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.activity-detail-close:hover {
+  background: #eef5f1;
+  border-color: #1d6f42;
+  color: #1d6f42;
+}
+
+/* ================================================= */
+/* IDENTIFICACIÓN DE LA ACTIVIDAD */
+/* ================================================= */
+
+.activity-detail-title {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 14px 18px;
+  background: #f7f8f9;
+  border-bottom: 1px solid #e8eaec;
+  text-align: center;
+}
+
+.activity-detail-title strong {
+  color: #30353a;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.activity-detail-title span {
+  color: #7b8288;
+  font-size: 10px;
+}
+
+/* ================================================= */
+/* INFORMACIÓN */
+/* ================================================= */
+
+.activity-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0;
+  margin: 14px 18px 0;
+  border: 1px solid #e4e7e9;
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.activity-detail-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 11px 12px;
+  background: #ffffff;
+  border-bottom: 1px solid #e8eaec;
+  text-align: center;
+}
+
+.activity-detail-item:nth-child(odd) {
+  border-right: 1px solid #e8eaec;
+}
+
+.activity-detail-item span {
+  width: 100%;
+  color: #858c92;
+  font-size: 9px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.activity-detail-item strong {
+  width: 100%;
+  color: #3e4449;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-align: center;
+}
+
+/* ================================================= */
+/* ESTADO MODAL */
+/* ================================================= */
+
+.activity-detail-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content !important;
+  margin: 0 auto;
+  padding: 4px 10px;
+  background: #e8f0fc;
+  border-radius: 10px;
+  color: #315f9e !important;
+  font-size: 9px !important;
+  font-weight: 700 !important;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* ================================================= */
+/* CAMPOS COMPLETOS */
+/* ================================================= */
+
+.activity-detail-full {
+  grid-column: 1 / -1;
+  border-right: none !important;
+}
+
+.activity-detail-text {
+  width: 100%;
+  font-weight: 500 !important;
+  line-height: 1.5 !important;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+/* ================================================= */
+/* ÚLTIMA FILA */
+/* ================================================= */
+
+.activity-detail-item:nth-last-child(1) {
+  border-bottom: none;
+}
+
+/* ================================================= */
+/* ACCIONES MODAL */
+/* ================================================= */
+
+.activity-detail-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 14px 18px 16px;
+}
+
+.activity-detail-close-button {
+  height: 30px;
+  padding: 0 13px;
+  background: #ffffff;
+  border: 1px solid #d7dcdf;
+  border-radius: 5px;
+  color: #555c62;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.activity-detail-close-button:hover {
+  background: #f1f7f3;
+  border-color: #1d6f42;
+  color: #1d6f42;
+}
+
+/* ================================================= */
+/* ANIMACIONES */
+/* ================================================= */
+
+@keyframes activityDetailOverlayEntrada {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes activityDetailModalEntrada {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ================================================= */
+/* RESPONSIVE MODAL */
+/* ================================================= */
+
+@media (max-width: 700px) {
+  .activity-detail-overlay {
+    padding: 15px;
+  }
+
+  .activity-detail-modal {
+    width: 100%;
+    max-height: 90vh;
+  }
+
+  .activity-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .activity-detail-item:nth-child(odd) {
+    border-right: none;
+  }
+
+  .activity-detail-item {
+    border-bottom: 1px solid #e8eaec;
+  }
+
+  .activity-detail-item:last-child {
+    border-bottom: none;
+  }
+}
+
+/* ================================================= */
+/* BOTÓN VER DETALLE */
+/* ================================================= */
+
+.reprogramacion-detail-button {
+  display: block;
+  width: fit-content;
+  margin: 5px auto 0;
+  padding: 3px 8px;
+  background: #ffffff;
+  border: 1px solid #cfd6d2;
+  border-radius: 4px;
+  color: #1d6f42;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.reprogramacion-detail-button:hover {
+  background: #f1f7f3;
+  border-color: #1d6f42;
+  color: #155a35;
+}
+
+.reprogramacion-detail-button:active {
+  transform: scale(0.97);
+}
