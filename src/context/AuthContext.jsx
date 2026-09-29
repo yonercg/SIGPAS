@@ -25,7 +25,7 @@ async function sembrarAdminInicial() {
     const guardados = localStorage.getItem(CLAVE_USUARIOS);
     if (guardados) return;
 
-    const passwordHash = await hashPassword("admin123");
+    const passwordHash = await hashPassword("admin1408");
 
     const admin = {
       id: "USR-ADMIN-0001",
