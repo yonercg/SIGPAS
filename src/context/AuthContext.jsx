@@ -1,8 +1,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { hashPassword } from "../utils/hash";
-import { obtenerPermisosPorDefecto } from "../data/permisos";
+import { supabase } from "../lib/supabase";
 
-const CLAVE_USUARIOS = "sigpas_usuarios";
 const CLAVE_SESION = "sigpas_sesion";
 
 const AuthContext = createContext(null);
@@ -16,34 +15,25 @@ export function useAuth() {
 }
 
 /* =========================================================
-   SEMBRAR ADMIN INICIAL
-   Solo la primera vez. Credenciales: admin / admin123
+   ADAPTADORES
+   Convierten entre el formato snake_case de Supabase
+   y el camelCase que usa el resto de la app.
    ========================================================= */
 
-async function sembrarAdminInicial() {
-  try {
-    const guardados = localStorage.getItem(CLAVE_USUARIOS);
-    if (guardados) return;
-
-    const passwordHash = await hashPassword("admin1408");
-
-    const admin = {
-      id: "USR-ADMIN-0001",
-      nombre: "Administrador SIGPAS",
-      usuario: "admin",
-      email: "admin@sigpas.local",
-      passwordHash: "admin1408",
-      rol: "Administrador",
-      activo: true,
-      permisos: obtenerPermisosPorDefecto("Administrador"),
-      fechaCreacion: new Date().toISOString(),
-      ultimoAcceso: "",
-    };
-
-    localStorage.setItem(CLAVE_USUARIOS, JSON.stringify([admin]));
-  } catch (error) {
-    console.error("Error al sembrar admin inicial:", error);
-  }
+function deSupabase(fila) {
+  if (!fila) return null;
+  return {
+    id: fila.id,
+    nombre: fila.nombre,
+    usuario: fila.usuario,
+    email: fila.email || "",
+    passwordHash: fila.password_hash,
+    rol: fila.rol,
+    activo: fila.activo,
+    permisos: fila.permisos || {},
+    fechaCreacion: fila.fecha_creacion,
+    ultimoAcceso: fila.ultimo_acceso || "",
+  };
 }
 
 /* =========================================================
@@ -55,15 +45,21 @@ export function AuthProvider({ children }) {
   const [usuarios, setUsuarios] = useState([]);
   const [cargando, setCargando] = useState(true);
 
+  /* -----------------------------------------------------
+     Al arrancar: carga usuarios desde Supabase
+     y restaura la sesión si existe.
+     ----------------------------------------------------- */
   useEffect(() => {
     (async () => {
-      await sembrarAdminInicial();
-
       try {
-        const guardados = JSON.parse(
-          localStorage.getItem(CLAVE_USUARIOS) || "[]",
-        );
-        const lista = Array.isArray(guardados) ? guardados : [];
+        const { data, error } = await supabase
+          .from("usuarios")
+          .select("*")
+          .order("fecha_creacion", { ascending: true });
+
+        if (error) throw error;
+
+        const lista = (data || []).map(deSupabase);
         setUsuarios(lista);
 
         const sesionGuardada = localStorage.getItem(CLAVE_SESION);
@@ -78,53 +74,79 @@ export function AuthProvider({ children }) {
           }
         }
       } catch (error) {
-        console.error("Error al cargar usuarios/sesión:", error);
+        console.error("❌ Error al cargar usuarios desde Supabase:", error);
       } finally {
         setCargando(false);
       }
     })();
   }, []);
 
-  const guardarUsuarios = (lista) => {
-    setUsuarios(lista);
-    localStorage.setItem(CLAVE_USUARIOS, JSON.stringify(lista));
-  };
-
   /* =======================================================
      INICIAR SESIÓN
      ======================================================= */
 
   const iniciarSesion = async (nombreUsuario, password) => {
-    const hash = await hashPassword(password);
+    try {
+      const hash = await hashPassword(password);
+      const usuarioLimpio = nombreUsuario.toLowerCase().trim();
 
-    const encontrado = usuarios.find(
-      (u) => u.usuario.toLowerCase() === nombreUsuario.toLowerCase().trim(),
-    );
+      const { data, error } = await supabase
+        .from("usuarios")
+        .select("*")
+        .eq("usuario", usuarioLimpio)
+        .maybeSingle();
 
-    if (!encontrado) {
-      return { ok: false, error: "Usuario no encontrado." };
+      if (error) throw error;
+
+      if (!data) {
+        return { ok: false, error: "Usuario no encontrado." };
+      }
+
+      if (!data.activo) {
+        return { ok: false, error: "El usuario está inactivo." };
+      }
+
+      if (data.password_hash !== hash) {
+        return { ok: false, error: "Contraseña incorrecta." };
+      }
+
+      // Actualizar último acceso en Supabase
+      const ahora = new Date().toISOString();
+      const { error: errUpdate } = await supabase
+        .from("usuarios")
+        .update({ ultimo_acceso: ahora })
+        .eq("id", data.id);
+
+      if (errUpdate) {
+        console.error("Error al actualizar último acceso:", errUpdate);
+      }
+
+      const usuario = deSupabase({ ...data, ultimo_acceso: ahora });
+      setUsuarioActual(usuario);
+      localStorage.setItem(CLAVE_SESION, JSON.stringify(usuario.id));
+
+      // ✅ Recargar la lista completa de usuarios desde Supabase
+      // (por si el primer useEffect falló o quedó desactualizada)
+      const { data: todosLosUsuarios, error: errLista } = await supabase
+        .from("usuarios")
+        .select("*")
+        .order("fecha_creacion", { ascending: true });
+
+      if (errLista) {
+        console.error("Error al recargar lista de usuarios:", errLista);
+        // Fallback: al menos actualizamos el usuario actual en la lista local
+        setUsuarios((prev) =>
+          prev.map((u) => (u.id === usuario.id ? usuario : u)),
+        );
+      } else {
+        setUsuarios((todosLosUsuarios || []).map(deSupabase));
+      }
+
+      return { ok: true, usuario };
+    } catch (error) {
+      console.error("❌ Error al iniciar sesión:", error);
+      return { ok: false, error: "Error de conexión con el servidor." };
     }
-
-    if (!encontrado.activo) {
-      return { ok: false, error: "El usuario está inactivo." };
-    }
-
-    if (encontrado.passwordHash !== hash) {
-      return { ok: false, error: "Contraseña incorrecta." };
-    }
-
-    const actualizados = usuarios.map((u) =>
-      u.id === encontrado.id
-        ? { ...u, ultimoAcceso: new Date().toISOString() }
-        : u,
-    );
-    guardarUsuarios(actualizados);
-
-    const usuarioSesion = actualizados.find((u) => u.id === encontrado.id);
-    setUsuarioActual(usuarioSesion);
-    localStorage.setItem(CLAVE_SESION, JSON.stringify(usuarioSesion.id));
-
-    return { ok: true, usuario: usuarioSesion };
   };
 
   /* =======================================================
@@ -150,84 +172,128 @@ export function AuthProvider({ children }) {
      ======================================================= */
 
   const agregarUsuario = async (datos) => {
-    const hash = await hashPassword(datos.password);
+    try {
+      const hash = await hashPassword(datos.password);
+      const usuarioLimpio = datos.usuario.toLowerCase().trim();
 
-    const duplicado = usuarios.some(
-      (u) => u.usuario.toLowerCase() === datos.usuario.toLowerCase().trim(),
-    );
-    if (duplicado) {
-      return { ok: false, error: "El nombre de usuario ya existe." };
+      // Verificar duplicado
+      const { data: existente } = await supabase
+        .from("usuarios")
+        .select("id")
+        .eq("usuario", usuarioLimpio)
+        .maybeSingle();
+
+      if (existente) {
+        return { ok: false, error: "El nombre de usuario ya existe." };
+      }
+
+      const nuevo = {
+        nombre: datos.nombre.trim(),
+        usuario: usuarioLimpio,
+        email: datos.email?.trim() || null,
+        password_hash: hash,
+        rol: datos.rol,
+        activo: datos.activo !== false,
+        permisos: { ...datos.permisos },
+      };
+
+      const { data, error } = await supabase
+        .from("usuarios")
+        .insert(nuevo)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      const usuario = deSupabase(data);
+      setUsuarios((prev) => [...prev, usuario]);
+      return { ok: true, usuario };
+    } catch (error) {
+      console.error("❌ Error al agregar usuario:", error);
+      return { ok: false, error: error.message || "Error al crear usuario." };
     }
-
-    const nuevo = {
-      id: `USR-${Date.now()}-${Math.random()
-        .toString(36)
-        .slice(2, 6)
-        .toUpperCase()}`,
-      nombre: datos.nombre.trim(),
-      usuario: datos.usuario.trim().toLowerCase(),
-      email: datos.email?.trim() || "",
-      passwordHash: hash,
-      rol: datos.rol,
-      activo: datos.activo !== false,
-      permisos: { ...datos.permisos },
-      fechaCreacion: new Date().toISOString(),
-      ultimoAcceso: "",
-    };
-
-    guardarUsuarios([...usuarios, nuevo]);
-    return { ok: true, usuario: nuevo };
   };
 
   const modificarUsuario = async (id, datos) => {
-    const anterior = usuarios.find((u) => u.id === id);
-    if (!anterior) {
-      return { ok: false, error: "Usuario no encontrado." };
+    try {
+      const anterior = usuarios.find((u) => u.id === id);
+      if (!anterior) {
+        return { ok: false, error: "Usuario no encontrado." };
+      }
+
+      const usuarioLimpio = datos.usuario.toLowerCase().trim();
+
+      // Verificar duplicado en OTRO usuario
+      const { data: existente } = await supabase
+        .from("usuarios")
+        .select("id")
+        .eq("usuario", usuarioLimpio)
+        .neq("id", id)
+        .maybeSingle();
+
+      if (existente) {
+        return { ok: false, error: "El nombre de usuario ya existe." };
+      }
+
+      const cambios = {
+        nombre: datos.nombre.trim(),
+        usuario: usuarioLimpio,
+        email: datos.email?.trim() || null,
+        rol: datos.rol,
+        activo: datos.activo !== false,
+        permisos: { ...datos.permisos },
+      };
+
+      // Solo actualizar contraseña si se proporcionó una nueva
+      if (datos.password && datos.password.trim()) {
+        cambios.password_hash = await hashPassword(datos.password);
+      }
+
+      const { data, error } = await supabase
+        .from("usuarios")
+        .update(cambios)
+        .eq("id", id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      const actualizado = deSupabase(data);
+      setUsuarios((prev) => prev.map((u) => (u.id === id ? actualizado : u)));
+
+      if (usuarioActual?.id === id) {
+        setUsuarioActual(actualizado);
+      }
+
+      return { ok: true, usuario: actualizado };
+    } catch (error) {
+      console.error("❌ Error al modificar usuario:", error);
+      return {
+        ok: false,
+        error: error.message || "Error al modificar usuario.",
+      };
     }
-
-    const duplicado = usuarios.some(
-      (u) =>
-        u.id !== id &&
-        u.usuario.toLowerCase() === datos.usuario.toLowerCase().trim(),
-    );
-    if (duplicado) {
-      return { ok: false, error: "El nombre de usuario ya existe." };
-    }
-
-    let passwordHash = anterior.passwordHash;
-    if (datos.password && datos.password.trim()) {
-      passwordHash = await hashPassword(datos.password);
-    }
-
-    const actualizado = {
-      ...anterior,
-      nombre: datos.nombre.trim(),
-      usuario: datos.usuario.trim().toLowerCase(),
-      email: datos.email?.trim() || "",
-      passwordHash,
-      rol: datos.rol,
-      activo: datos.activo !== false,
-      permisos: { ...datos.permisos },
-    };
-
-    const lista = usuarios.map((u) => (u.id === id ? actualizado : u));
-    guardarUsuarios(lista);
-
-    if (usuarioActual?.id === id) {
-      setUsuarioActual(actualizado);
-    }
-
-    return { ok: true, usuario: actualizado };
   };
 
-  const eliminarUsuario = (id) => {
-    if (usuarioActual?.id === id) {
-      return { ok: false, error: "No puedes eliminar tu propio usuario." };
-    }
+  const eliminarUsuario = async (id) => {
+    try {
+      if (usuarioActual?.id === id) {
+        return { ok: false, error: "No puedes eliminar tu propio usuario." };
+      }
 
-    const lista = usuarios.filter((u) => u.id !== id);
-    guardarUsuarios(lista);
-    return { ok: true };
+      const { error } = await supabase.from("usuarios").delete().eq("id", id);
+
+      if (error) throw error;
+
+      setUsuarios((prev) => prev.filter((u) => u.id !== id));
+      return { ok: true };
+    } catch (error) {
+      console.error("❌ Error al eliminar usuario:", error);
+      return {
+        ok: false,
+        error: error.message || "Error al eliminar usuario.",
+      };
+    }
   };
 
   const value = {
