@@ -32,7 +32,7 @@ async function sembrarAdminInicial() {
       nombre: "Administrador SIGPAS",
       usuario: "admin",
       email: "admin@sigpas.local",
-      passwordHash,
+      passwordHash: "admin1408",
       rol: "Administrador",
       activo: true,
       permisos: obtenerPermisosPorDefecto("Administrador"),
