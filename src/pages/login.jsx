@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { obtenerPrimeraRutaPermitida } from "../data/permisos";
-import "./Login.css";
+import "./login.css";
 
 export default function Login() {
   const navigate = useNavigate();
