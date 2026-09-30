@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useActividades } from "../context/ActividadesContext";
+import { supabase } from "../lib/supabase";
 import "./PM.css";
 
-const CLAVE_PM = "sigpas_plan_mantenimiento";
-const CLAVE_CONSECUTIVO_PM = "sigpas_pm_consecutivos";
+const PM_ROW_PLAN = "plan";
+const PM_ROW_CONSECUTIVOS = "consecutivos";
 
 const semanas = Array.from({ length: 52 }, (_, indice) => indice + 1);
 
@@ -11,49 +12,23 @@ const semanas = Array.from({ length: 52 }, (_, indice) => indice + 1);
 // GENERAR PM ID
 // =================================================
 
-const generarPmId = (anio, actividadesExistentes = []) => {
+const generarPmId = (anio, actividadesExistentes = [], consecutivos = {}) => {
   const anioNumero = Number(anio);
 
   if (!anioNumero) {
-    return "";
+    return { pmId: "", consecutivos };
   }
 
-  let consecutivosGuardados = {};
-
-  try {
-    const guardados = localStorage.getItem(CLAVE_CONSECUTIVO_PM);
-
-    if (guardados) {
-      const datos = JSON.parse(guardados);
-
-      if (datos && typeof datos === "object") {
-        consecutivosGuardados = datos;
-      }
-    }
-  } catch (error) {
-    console.error(
-      "Error al cargar los consecutivos del Plan de Mantenimiento:",
-      error,
-    );
-  }
-
-  let mayorConsecutivo = Number(consecutivosGuardados[anioNumero] || 0);
-
+  let mayorConsecutivo = Number(consecutivos[anioNumero] || 0);
   const prefijo = `PM-${anioNumero}-`;
 
   actividadesExistentes.forEach((actividad) => {
-    if (!actividad?.pmId) {
-      return;
-    }
+    if (!actividad?.pmId) return;
 
     const pmId = String(actividad.pmId);
-
-    if (!pmId.startsWith(prefijo)) {
-      return;
-    }
+    if (!pmId.startsWith(prefijo)) return;
 
     const parteNumerica = pmId.replace(prefijo, "");
-
     const consecutivo = Number(parteNumerica);
 
     if (Number.isInteger(consecutivo) && consecutivo > mayorConsecutivo) {
@@ -63,46 +38,34 @@ const generarPmId = (anio, actividadesExistentes = []) => {
 
   const siguienteConsecutivo = mayorConsecutivo + 1;
 
-  const nuevosConsecutivos = {
-    ...consecutivosGuardados,
-    [anioNumero]: siguienteConsecutivo,
+  return {
+    pmId: `${prefijo}${String(siguienteConsecutivo).padStart(6, "0")}`,
+    consecutivos: {
+      ...consecutivos,
+      [anioNumero]: siguienteConsecutivo,
+    },
   };
-
-  try {
-    localStorage.setItem(
-      CLAVE_CONSECUTIVO_PM,
-      JSON.stringify(nuevosConsecutivos),
-    );
-  } catch (error) {
-    console.error(
-      "Error al guardar el consecutivo del Plan de Mantenimiento:",
-      error,
-    );
-  }
-
-  return `${prefijo}${String(siguienteConsecutivo).padStart(6, "0")}`;
 };
 
 // =================================================
 // NORMALIZAR PM ID
 // =================================================
 
-const normalizarPMId = (valor) => {
-  return String(valor || "")
+const normalizarPMId = (valor) =>
+  String(valor || "")
     .trim()
     .toUpperCase();
-};
 
 // =================================================
 // PREPARAR ACTIVIDADES PM EXISTENTES
 // =================================================
 
-const prepararActividadesPM = (datos, anioActual) => {
+const prepararActividadesPM = (datos, anioActual, consecutivos = {}) => {
   if (!Array.isArray(datos)) {
-    return [];
+    return { actividades: [], huboCambios: false, consecutivos };
   }
 
-  let actividadesPreparadas = datos.map((actividad) => ({
+  const actividadesPreparadas = datos.map((actividad) => ({
     ...actividad,
     anio: actividad.anio || anioActual,
     semanaReprogramada: actividad.semanaReprogramada || "",
@@ -110,114 +73,95 @@ const prepararActividadesPM = (datos, anioActual) => {
   }));
 
   let huboCambios = false;
-
   const actividadesPorAnio = {};
 
   actividadesPreparadas.forEach((actividad) => {
     const anio = Number(actividad.anio || anioActual);
-
-    if (!actividadesPorAnio[anio]) {
-      actividadesPorAnio[anio] = [];
-    }
-
+    if (!actividadesPorAnio[anio]) actividadesPorAnio[anio] = [];
     actividadesPorAnio[anio].push(actividad);
   });
 
-  let consecutivosGuardados = {};
-
-  try {
-    const guardados = localStorage.getItem(CLAVE_CONSECUTIVO_PM);
-
-    if (guardados) {
-      const datosConsecutivos = JSON.parse(guardados);
-
-      if (datosConsecutivos && typeof datosConsecutivos === "object") {
-        consecutivosGuardados = datosConsecutivos;
-      }
-    }
-  } catch (error) {
-    console.error("Error al cargar consecutivos PM:", error);
-  }
+  const consecutivosActualizados = { ...consecutivos };
 
   Object.keys(actividadesPorAnio).forEach((anio) => {
     const anioNumero = Number(anio);
-
-    let mayorConsecutivo = Number(consecutivosGuardados[anioNumero] || 0);
-
+    let mayorConsecutivo = Number(consecutivosActualizados[anioNumero] || 0);
     const prefijo = `PM-${anioNumero}-`;
 
     actividadesPorAnio[anio].forEach((actividad) => {
-      if (!actividad?.pmId) {
-        return;
-      }
-
+      if (!actividad?.pmId) return;
       const pmId = String(actividad.pmId);
+      if (!pmId.startsWith(prefijo)) return;
 
-      if (!pmId.startsWith(prefijo)) {
-        return;
-      }
-
-      const parteNumerica = pmId.replace(prefijo, "");
-
-      const consecutivo = Number(parteNumerica);
-
+      const consecutivo = Number(pmId.replace(prefijo, ""));
       if (Number.isInteger(consecutivo) && consecutivo > mayorConsecutivo) {
         mayorConsecutivo = consecutivo;
       }
     });
 
     actividadesPorAnio[anio].forEach((actividad) => {
-      if (actividad.pmId) {
-        return;
-      }
+      if (actividad.pmId) return;
 
       mayorConsecutivo += 1;
-
       actividad.pmId = `${prefijo}${String(mayorConsecutivo).padStart(6, "0")}`;
-
       huboCambios = true;
     });
 
-    consecutivosGuardados[anioNumero] = mayorConsecutivo;
+    consecutivosActualizados[anioNumero] = mayorConsecutivo;
   });
-
-  try {
-    localStorage.setItem(
-      CLAVE_CONSECUTIVO_PM,
-      JSON.stringify(consecutivosGuardados),
-    );
-  } catch (error) {
-    console.error("Error al guardar consecutivos PM:", error);
-  }
 
   return {
     actividades: actividadesPreparadas,
     huboCambios,
+    consecutivos: consecutivosActualizados,
   };
 };
+
+// =================================================
+// PERSISTENCIA EN SUPABASE
+// =================================================
+
+async function persistirPlan(actividades) {
+  const { error } = await supabase.from("pm").upsert(
+    {
+      id: PM_ROW_PLAN,
+      datos: actividades,
+      fecha_actualizacion: new Date().toISOString(),
+    },
+    { onConflict: "id" },
+  );
+
+  if (error) {
+    console.error("Error guardando el Plan de Mantenimiento:", error);
+  }
+}
+
+async function persistirConsecutivos(consecutivos) {
+  const { error } = await supabase.from("pm").upsert(
+    {
+      id: PM_ROW_CONSECUTIVOS,
+      datos: consecutivos,
+      fecha_actualizacion: new Date().toISOString(),
+    },
+    { onConflict: "id" },
+  );
+
+  if (error) {
+    console.error("Error guardando los consecutivos del PM:", error);
+  }
+}
+
+// =================================================
+// COMPONENTE
+// =================================================
 
 function PM() {
   const anioActual = new Date().getFullYear();
 
-  const [actividadesPM, setActividadesPM] = useState(() => {
-    try {
-      const guardadas = localStorage.getItem(CLAVE_PM);
+  const [actividadesPM, setActividadesPM] = useState([]);
+  const [cargando, setCargando] = useState(true);
 
-      if (!guardadas) {
-        return [];
-      }
-
-      const datos = JSON.parse(guardadas);
-
-      const resultado = prepararActividadesPM(datos, anioActual);
-
-      return resultado.actividades;
-    } catch (error) {
-      console.error("Error al cargar el Plan de Mantenimiento:", error);
-
-      return [];
-    }
-  });
+  const consecutivosRef = useRef({});
 
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
   const [mostrarDetalles, setMostrarDetalles] = useState(false);
@@ -242,16 +186,87 @@ function PM() {
   const { actividades } = useActividades();
 
   // =================================================
-  // GUARDAR PM EN LOCALSTORAGE
+  // CARGA INICIAL DESDE SUPABASE
   // =================================================
 
   useEffect(() => {
-    try {
-      localStorage.setItem(CLAVE_PM, JSON.stringify(actividadesPM));
-    } catch (error) {
-      console.error("Error al guardar el Plan de Mantenimiento:", error);
-    }
-  }, [actividadesPM]);
+    let activo = true;
+
+    (async () => {
+      try {
+        const [resActividades, resConsecutivos] = await Promise.all([
+          supabase
+            .from("pm")
+            .select("datos")
+            .eq("id", PM_ROW_PLAN)
+            .maybeSingle(),
+          supabase
+            .from("pm")
+            .select("datos")
+            .eq("id", PM_ROW_CONSECUTIVOS)
+            .maybeSingle(),
+        ]);
+
+        if (!activo) return;
+
+        if (resActividades.error) {
+          console.error("Error cargando PM:", resActividades.error);
+        }
+        if (resConsecutivos.error) {
+          console.error(
+            "Error cargando consecutivos PM:",
+            resConsecutivos.error,
+          );
+        }
+
+        const datos = Array.isArray(resActividades.data?.datos)
+          ? resActividades.data.datos
+          : [];
+
+        const consecutivosGuardados =
+          resConsecutivos.data?.datos &&
+          typeof resConsecutivos.data.datos === "object"
+            ? resConsecutivos.data.datos
+            : {};
+
+        const resultado = prepararActividadesPM(
+          datos,
+          anioActual,
+          consecutivosGuardados,
+        );
+
+        consecutivosRef.current = resultado.consecutivos;
+        setActividadesPM(resultado.actividades);
+
+        if (resultado.huboCambios) {
+          await persistirConsecutivos(resultado.consecutivos);
+        }
+      } catch (error) {
+        console.error("Error cargando el Plan de Mantenimiento:", error);
+      } finally {
+        if (activo) setCargando(false);
+      }
+    })();
+
+    return () => {
+      activo = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // =================================================
+  // GUARDAR PM EN SUPABASE (con debounce)
+  // =================================================
+
+  useEffect(() => {
+    if (cargando) return undefined;
+
+    const timeoutId = setTimeout(() => {
+      persistirPlan(actividadesPM);
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [actividadesPM, cargando]);
 
   // =================================================
   // CAMBIOS DEL FORMULARIO
@@ -269,10 +284,6 @@ function PM() {
     }));
   };
 
-  // =================================================
-  // ABRIR FORMULARIO
-  // =================================================
-
   const abrirFormulario = () => {
     setFormulario({
       subestacion: "",
@@ -284,17 +295,10 @@ function PM() {
       estado: "P",
       semanaReprogramada: "",
     });
-
     setMostrarFormulario(true);
   };
 
-  // =================================================
-  // CERRAR FORMULARIO
-  // =================================================
-
-  const cerrarFormulario = () => {
-    setMostrarFormulario(false);
-  };
+  const cerrarFormulario = () => setMostrarFormulario(false);
 
   // =================================================
   // GUARDAR NUEVA ACTIVIDAD PM
@@ -316,7 +320,12 @@ function PM() {
     }
 
     const anioActividad = Number(formulario.anio);
-    const pmId = generarPmId(anioActividad, actividadesPM);
+
+    const { pmId, consecutivos } = generarPmId(
+      anioActividad,
+      actividadesPM,
+      consecutivosRef.current,
+    );
 
     if (!pmId) {
       alert(
@@ -324,6 +333,9 @@ function PM() {
       );
       return;
     }
+
+    consecutivosRef.current = consecutivos;
+    persistirConsecutivos(consecutivos);
 
     const nuevaActividad = {
       id: Date.now(),
@@ -363,10 +375,7 @@ function PM() {
     const confirmar = window.confirm(
       "¿Está seguro de eliminar esta actividad del Plan de Mantenimiento?",
     );
-
-    if (!confirmar) {
-      return;
-    }
+    if (!confirmar) return;
 
     setActividadesPM((anteriores) =>
       anteriores.filter((actividad) => actividad.id !== id),
@@ -374,121 +383,68 @@ function PM() {
   };
 
   // =================================================
-  // NORMALIZACIÓN DE TEXTO
+  // NORMALIZACIÓN / FECHAS
   // =================================================
 
-  const normalizarTexto = (valor) => {
-    return String(valor || "")
+  const normalizarTexto = (valor) =>
+    String(valor || "")
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
       .trim()
       .toLowerCase();
-  };
-
-  // =================================================
-  // CONVERSIÓN DE FECHAS
-  // =================================================
 
   const convertirFecha = (valor) => {
-    if (!valor) {
-      return null;
-    }
-
-    if (valor instanceof Date) {
-      return valor;
-    }
+    if (!valor) return null;
+    if (valor instanceof Date) return valor;
 
     const fecha = new Date(valor);
-
-    if (!Number.isNaN(fecha.getTime())) {
-      return fecha;
-    }
+    if (!Number.isNaN(fecha.getTime())) return fecha;
 
     if (typeof valor === "string") {
       const partes = valor.split("/");
-
       if (partes.length === 3) {
         const dia = Number(partes[0]);
         const mes = Number(partes[1]) - 1;
         const anio = Number(partes[2]);
-
         const fechaManual = new Date(anio, mes, dia);
-
-        if (!Number.isNaN(fechaManual.getTime())) {
-          return fechaManual;
-        }
+        if (!Number.isNaN(fechaManual.getTime())) return fechaManual;
       }
     }
-
     return null;
   };
 
-  // =================================================
-  // OBTENER SEMANA ISO
-  // =================================================
-
   const obtenerSemanaISO = (fecha) => {
-    if (!fecha) {
-      return null;
-    }
+    if (!fecha) return null;
 
     const fechaUTC = new Date(
       Date.UTC(fecha.getFullYear(), fecha.getMonth(), fecha.getDate()),
     );
-
     const diaSemana = fechaUTC.getUTCDay() || 7;
-
     fechaUTC.setUTCDate(fechaUTC.getUTCDate() + 4 - diaSemana);
 
     const inicioAnio = new Date(Date.UTC(fechaUTC.getUTCFullYear(), 0, 1));
-
     return Math.ceil(((fechaUTC - inicioAnio) / 86400000 + 1) / 7);
   };
 
-  // =================================================
-  // OBTENER AÑO ISO
-  // =================================================
-
   const obtenerAnioISO = (fecha) => {
-    if (!fecha) {
-      return null;
-    }
+    if (!fecha) return null;
 
     const fechaUTC = new Date(
       Date.UTC(fecha.getFullYear(), fecha.getMonth(), fecha.getDate()),
     );
-
     const diaSemana = fechaUTC.getUTCDay() || 7;
-
     fechaUTC.setUTCDate(fechaUTC.getUTCDate() + 4 - diaSemana);
-
     return fechaUTC.getUTCFullYear();
   };
 
-  // =================================================
-  // SEMANA ORIGINAL DEL PM
-  // =================================================
-
   const obtenerSemanaOriginalActividad = (actividad) => {
-    if (!actividad) {
-      return null;
-    }
+    if (!actividad) return null;
 
-    if (actividad.semanaOriginal) {
-      return Number(actividad.semanaOriginal);
-    }
-
-    if (actividad.semanaProgramacionOriginal) {
+    if (actividad.semanaOriginal) return Number(actividad.semanaOriginal);
+    if (actividad.semanaProgramacionOriginal)
       return Number(actividad.semanaProgramacionOriginal);
-    }
-
-    if (actividad.semanaPM) {
-      return Number(actividad.semanaPM);
-    }
-
-    if (actividad.semana) {
-      return Number(actividad.semana);
-    }
+    if (actividad.semanaPM) return Number(actividad.semanaPM);
+    if (actividad.semana) return Number(actividad.semana);
 
     const fecha =
       convertirFecha(actividad.fechaProgramacionOriginal) ||
@@ -499,169 +455,73 @@ function PM() {
     return obtenerSemanaISO(fecha);
   };
 
-  // =================================================
-  // SEMANA ACTUAL DE LA ACTIVIDAD DE PROGRAMACIÓN
-  // =================================================
-
   const obtenerSemanaActualActividad = (actividad) => {
-    if (!actividad) {
-      return null;
-    }
+    if (!actividad) return null;
 
-    // La fecha actual de Programación es la fuente principal.
     if (actividad.fecha) {
-      const fecha = convertirFecha(actividad.fecha);
-      const semana = obtenerSemanaISO(fecha);
-
-      if (semana !== null) {
-        return semana;
-      }
+      const semana = obtenerSemanaISO(convertirFecha(actividad.fecha));
+      if (semana !== null) return semana;
     }
-
-    if (actividad.semanaReprogramada) {
+    if (actividad.semanaReprogramada)
       return Number(actividad.semanaReprogramada);
-    }
-
-    if (actividad.semanaActual) {
-      return Number(actividad.semanaActual);
-    }
+    if (actividad.semanaActual) return Number(actividad.semanaActual);
 
     const fecha =
       convertirFecha(actividad.fechaProgramacion) ||
       convertirFecha(actividad.fechaActual);
-
     return obtenerSemanaISO(fecha);
   };
 
-  // =================================================
-  // AÑO ACTUAL DE LA ACTIVIDAD DE PROGRAMACIÓN
-  // =================================================
-
   const obtenerAnioActualActividad = (actividad) => {
-    if (!actividad) {
-      return null;
-    }
+    if (!actividad) return null;
 
-    // La fecha actual de Programación es la fuente principal.
     if (actividad.fecha) {
-      const fecha = convertirFecha(actividad.fecha);
-      const anio = obtenerAnioISO(fecha);
-
-      if (anio !== null) {
-        return anio;
-      }
+      const anio = obtenerAnioISO(convertirFecha(actividad.fecha));
+      if (anio !== null) return anio;
     }
-
-    if (actividad.anioSemanaReprogramada) {
+    if (actividad.anioSemanaReprogramada)
       return Number(actividad.anioSemanaReprogramada);
-    }
-
-    if (actividad.anioActual) {
-      return Number(actividad.anioActual);
-    }
+    if (actividad.anioActual) return Number(actividad.anioActual);
 
     const fecha =
       convertirFecha(actividad.fechaProgramacion) ||
       convertirFecha(actividad.fechaActual);
+    if (fecha) return obtenerAnioISO(fecha);
 
-    if (fecha) {
-      return obtenerAnioISO(fecha);
-    }
-
-    if (actividad.anio) {
-      return Number(actividad.anio);
-    }
-
-    if (actividad.anioProgramacion) {
-      return Number(actividad.anioProgramacion);
-    }
+    if (actividad.anio) return Number(actividad.anio);
+    if (actividad.anioProgramacion) return Number(actividad.anioProgramacion);
 
     return null;
   };
 
-  // =================================================
-  // OBTENER ACTIVIDAD DE PROGRAMACIÓN POR PM ID
-  // =================================================
-  //
-  // IMPORTANTE:
-  // El vínculo entre PM y Programación se hace
-  // EXCLUSIVAMENTE mediante pmId.
-  //
-  // Ya NO se utiliza:
-  // - Subestación
-  // - Tipo
-  // - Semana
-  // - Año
-  //
-  // Esto evita que dos actividades parecidas se
-  // relacionen incorrectamente.
-  // =================================================
-
   const obtenerActividadProgramacion = (actividadPM) => {
-    if (!actividadPM || !Array.isArray(actividades)) {
-      return null;
-    }
+    if (!actividadPM || !Array.isArray(actividades)) return null;
 
     const pmId = normalizarPMId(actividadPM.pmId);
+    if (!pmId) return null;
 
-    if (!pmId) {
-      return null;
-    }
+    const coincidencias = actividades.filter(
+      (actividad) => actividad && normalizarPMId(actividad.pmId) === pmId,
+    );
 
-    const coincidencias = actividades.filter((actividad) => {
-      if (!actividad) {
-        return false;
-      }
-
-      return normalizarPMId(actividad.pmId) === pmId;
-    });
-
-    if (coincidencias.length === 0) {
-      return null;
-    }
-
+    if (coincidencias.length === 0) return null;
     return coincidencias[coincidencias.length - 1];
   };
 
-  // =================================================
-  // OBTENER SEMANA PROGRAMADA
-  // =================================================
-
   const obtenerSemanaProgramada = (actividad) => {
     const actividadProgramacion = obtenerActividadProgramacion(actividad);
-
-    if (!actividadProgramacion) {
-      return null;
-    }
-
+    if (!actividadProgramacion) return null;
     return obtenerSemanaActualActividad(actividadProgramacion);
   };
 
-  // =================================================
-  // OBTENER ESTADO ACTUAL DEL PM
-  // =================================================
-
   const obtenerEstadoPM = (actividad) => {
-    if (!actividad) {
-      return "P";
-    }
-
-    // Si el usuario marcó manualmente el PM como
-    // no ejecutado, se conserva ese estado.
-    if (actividad.estado === "NE") {
-      return "NE";
-    }
+    if (!actividad) return "P";
+    if (actividad.estado === "NE") return "NE";
 
     const actividadProgramacion = obtenerActividadProgramacion(actividad);
-
-    // Si todavía no existe actividad vinculada en
-    // Programación, el PM continúa como programado.
-    if (!actividadProgramacion) {
-      return "P";
-    }
+    if (!actividadProgramacion) return "P";
 
     const estadoProgramacion = normalizarTexto(actividadProgramacion.estado);
-
     const estadosEjecutados = [
       "ejecutada",
       "ejecutado",
@@ -672,25 +532,15 @@ function PM() {
       "e",
     ];
 
-    const fueEjecutada = estadosEjecutados.includes(estadoProgramacion);
-
-    // Si la actividad está pendiente o reprogramada
-    // pero todavía no se ha ejecutado, continúa como P.
-    if (!fueEjecutada) {
-      return "P";
-    }
+    if (!estadosEjecutados.includes(estadoProgramacion)) return "P";
 
     const semanaOriginal = Number(actividad.semana);
     const anioOriginal = Number(actividad.anio || anioActual);
-
     const semanaActual = obtenerSemanaActualActividad(actividadProgramacion);
-
     const anioActualActividad = obtenerAnioActualActividad(
       actividadProgramacion,
     );
 
-    // Si se ejecutó en una semana o año diferente
-    // al PM original, el estado es ER.
     if (
       semanaActual !== null &&
       anioActualActividad !== null &&
@@ -704,7 +554,7 @@ function PM() {
   };
 
   // =================================================
-  // ACTUALIZAR ESTADO Y SEMANA PROGRAMADA DEL PM
+  // SINCRONIZAR ESTADO CON PROGRAMACIÓN
   // =================================================
 
   useEffect(() => {
@@ -718,7 +568,6 @@ function PM() {
 
         if (estadoCalculado === "ER") {
           const semanaProgramada = obtenerSemanaProgramada(actividad);
-
           if (
             semanaProgramada !== null &&
             String(semanaReprogramada) !== String(semanaProgramada)
@@ -737,12 +586,7 @@ function PM() {
             String(semanaReprogramada)
         ) {
           huboCambios = true;
-
-          return {
-            ...actividad,
-            estado: estadoCalculado,
-            semanaReprogramada,
-          };
+          return { ...actividad, estado: estadoCalculado, semanaReprogramada };
         }
 
         return actividad;
@@ -750,6 +594,7 @@ function PM() {
 
       return huboCambios ? actualizadas : anteriores;
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [actividades]);
 
   // =================================================
@@ -758,27 +603,17 @@ function PM() {
 
   const marcarComoNoEjecutada = (id) => {
     const actividad = actividadesPM.find((item) => item.id === id);
-
-    if (!actividad) {
-      return;
-    }
+    if (!actividad) return;
 
     const confirmar = window.confirm(
       "¿Desea marcar esta actividad como NO EJECUTADA?",
     );
-
-    if (!confirmar) {
-      return;
-    }
+    if (!confirmar) return;
 
     setActividadesPM((anteriores) =>
       anteriores.map((item) =>
         item.id === id
-          ? {
-              ...item,
-              estado: "NE",
-              semanaReprogramada: "",
-            }
+          ? { ...item, estado: "NE", semanaReprogramada: "" }
           : item,
       ),
     );
@@ -801,17 +636,12 @@ function PM() {
   };
 
   const guardarDetalles = () => {
-    if (!actividadDetalles) {
-      return;
-    }
+    if (!actividadDetalles) return;
 
     setActividadesPM((anteriores) =>
       anteriores.map((actividad) =>
         actividad.id === actividadDetalles.id
-          ? {
-              ...actividad,
-              detalles: textoDetalles,
-            }
+          ? { ...actividad, detalles: textoDetalles }
           : actividad,
       ),
     );
@@ -830,7 +660,6 @@ function PM() {
       ER: "Ejecutada Reprogramada",
       NE: "No ejecutada",
     };
-
     return etiquetas[estado] || estado;
   };
 
@@ -839,9 +668,7 @@ function PM() {
   // =================================================
 
   const aniosDisponibles = Array.from(
-    new Set(
-      actividadesPM.map((actividad) => Number(actividad.anio || anioActual)),
-    ),
+    new Set(actividadesPM.map((a) => Number(a.anio || anioActual))),
   ).sort((a, b) => a - b);
 
   if (!aniosDisponibles.includes(anioActual)) {
@@ -870,15 +697,38 @@ function PM() {
     return coincideAnio && coincideSemana && coincideEstado;
   });
 
-  // =================================================
-  // LIMPIAR FILTROS
-  // =================================================
-
   const limpiarFiltros = () => {
     setFiltroAnio("Todos");
     setFiltroSemana("Todas");
     setFiltroEstado("Todos");
   };
+
+  // =================================================
+  // RENDER — CARGANDO
+  // =================================================
+
+  if (cargando) {
+    return (
+      <div className="pm">
+        <section className="pm-section">
+          <div
+            style={{
+              padding: "40px",
+              textAlign: "center",
+              color: "#555",
+              fontSize: "15px",
+            }}
+          >
+            Cargando Plan de Mantenimiento...
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  // =================================================
+  // RENDER — NORMAL
+  // =================================================
 
   return (
     <div className="pm">
@@ -899,7 +749,6 @@ function PM() {
                   onChange={(e) => setFiltroAnio(e.target.value)}
                 >
                   <option value="Todos">Todos</option>
-
                   {aniosDisponibles.map((anio) => (
                     <option key={anio} value={anio}>
                       {anio}
@@ -910,14 +759,12 @@ function PM() {
 
               <div className="pm-filtro">
                 <label htmlFor="filtroSemana">Semana PM</label>
-
                 <select
                   id="filtroSemana"
                   value={filtroSemana}
                   onChange={(e) => setFiltroSemana(e.target.value)}
                 >
                   <option value="Todas">Todas</option>
-
                   {semanas.map((semana) => (
                     <option key={semana} value={semana}>
                       Semana {semana}
@@ -928,7 +775,6 @@ function PM() {
 
               <div className="pm-filtro">
                 <label htmlFor="filtroEstado">Estado</label>
-
                 <select
                   id="filtroEstado"
                   value={filtroEstado}
@@ -966,10 +812,6 @@ function PM() {
           </div>
         </div>
 
-        {/* =================================================
-            FORMULARIO NUEVA ACTIVIDAD PM
-            ================================================= */}
-
         {mostrarFormulario && (
           <div className="pm-formulario-contenedor">
             <div className="pm-formulario-header">
@@ -980,7 +822,6 @@ function PM() {
             <form className="pm-formulario" onSubmit={guardarActividad}>
               <div className="pm-formulario-campo">
                 <label htmlFor="subestacion">Subestación *</label>
-
                 <input
                   id="subestacion"
                   name="subestacion"
@@ -993,7 +834,6 @@ function PM() {
 
               <div className="pm-formulario-campo">
                 <label htmlFor="zona">Zona *</label>
-
                 <select
                   id="zona"
                   name="zona"
@@ -1009,7 +849,6 @@ function PM() {
 
               <div className="pm-formulario-campo">
                 <label htmlFor="nt">NT *</label>
-
                 <select
                   id="nt"
                   name="nt"
@@ -1024,7 +863,6 @@ function PM() {
 
               <div className="pm-formulario-campo">
                 <label htmlFor="tipo">Tipo *</label>
-
                 <select
                   id="tipo"
                   name="tipo"
@@ -1048,7 +886,6 @@ function PM() {
 
               <div className="pm-formulario-campo">
                 <label htmlFor="anio">Año PM *</label>
-
                 <input
                   id="anio"
                   name="anio"
@@ -1062,7 +899,6 @@ function PM() {
 
               <div className="pm-formulario-campo">
                 <label htmlFor="semana">Semana PM *</label>
-
                 <select
                   id="semana"
                   name="semana"
@@ -1070,7 +906,6 @@ function PM() {
                   onChange={manejarCambio}
                 >
                   <option value="">Seleccionar</option>
-
                   {semanas.map((semana) => (
                     <option key={semana} value={semana}>
                       Semana {semana}
@@ -1081,7 +916,6 @@ function PM() {
 
               <div className="pm-formulario-campo">
                 <label htmlFor="estado">Estado</label>
-
                 <select
                   id="estado"
                   name="estado"
@@ -1099,7 +933,6 @@ function PM() {
                   <label htmlFor="semanaReprogramada">
                     Semana reprogramada
                   </label>
-
                   <select
                     id="semanaReprogramada"
                     name="semanaReprogramada"
@@ -1107,7 +940,6 @@ function PM() {
                     onChange={manejarCambio}
                   >
                     <option value="">Seleccionar</option>
-
                     {semanas.map((semana) => (
                       <option key={semana} value={semana}>
                         Semana {semana}
@@ -1125,7 +957,6 @@ function PM() {
                 >
                   Cancelar
                 </button>
-
                 <button type="submit" className="pm-btn-guardar">
                   Guardar actividad
                 </button>
@@ -1134,18 +965,10 @@ function PM() {
           </div>
         )}
 
-        {/* =================================================
-            RESUMEN
-            ================================================= */}
-
         <div className="pm-tabla-resumen">
           <span>Actividades registradas</span>
           <strong>{actividadesFiltradas.length}</strong>
         </div>
-
-        {/* =================================================
-            TABLA PM
-            ================================================= */}
 
         <div className="pm-tabla-contenedor">
           <div className="pm-tabla-scroll">
@@ -1175,27 +998,20 @@ function PM() {
                     return (
                       <tr key={actividad.id}>
                         <td>{actividad.subestacion}</td>
-
                         <td>{actividad.zona}</td>
-
                         <td>{actividad.nt}</td>
-
                         <td>{actividad.tipo}</td>
-
                         <td>{actividad.anio}</td>
-
                         <td>
                           {actividad.semana
                             ? `Semana ${actividad.semana}`
                             : "—"}
                         </td>
-
                         <td>
                           {semanaProgramada
                             ? `Semana ${semanaProgramada}`
                             : "—"}
                         </td>
-
                         <td>
                           <span
                             className={`pm-estado pm-estado-${estadoActual.toLowerCase()}`}
@@ -1203,11 +1019,9 @@ function PM() {
                             {estadoActual} - {obtenerEstadoLabel(estadoActual)}
                           </span>
                         </td>
-
                         <td>
                           <span className="pm-id">{actividad.pmId || "—"}</span>
                         </td>
-
                         <td>
                           <button
                             type="button"
@@ -1219,7 +1033,6 @@ function PM() {
                             Ver detalles
                           </button>
                         </td>
-
                         <td>
                           <div className="pm-acciones">
                             {estadoActual === "P" && (
@@ -1234,7 +1047,6 @@ function PM() {
                                 NE
                               </button>
                             )}
-
                             <button
                               type="button"
                               className="pm-btn-eliminar"
@@ -1259,9 +1071,7 @@ function PM() {
                   <tr>
                     <td colSpan="11" className="pm-empty">
                       <div className="pm-empty-icon">📋</div>
-
                       <h3>No hay actividades registradas</h3>
-
                       <p>
                         Agregue una actividad al Plan de Mantenimiento para
                         comenzar.
@@ -1275,19 +1085,13 @@ function PM() {
         </div>
       </section>
 
-      {/* =================================================
-          MODAL DETALLES
-          ================================================= */}
-
       {mostrarDetalles && (
         <div className="pm-detalles-overlay">
           <div className="pm-detalles-modal">
             <div className="pm-detalles-header">
               <div>
                 <span>PLAN DE MANTENIMIENTO</span>
-
                 <h3>Detalles de actividad</h3>
-
                 {actividadDetalles && (
                   <p>
                     {actividadDetalles.subestacion} · Semana{" "}
@@ -1295,7 +1099,6 @@ function PM() {
                   </p>
                 )}
               </div>
-
               <button
                 type="button"
                 className="pm-detalles-cerrar"
@@ -1307,14 +1110,12 @@ function PM() {
 
             <div className="pm-detalles-contenido">
               <label htmlFor="textoDetalles">Detalles</label>
-
               <textarea
                 id="textoDetalles"
                 value={textoDetalles}
                 onChange={(e) => setTextoDetalles(e.target.value)}
                 placeholder="Ingrese observaciones, trabajos realizados, novedades o información adicional..."
               />
-
               <div className="pm-detalles-acciones">
                 <button
                   type="button"
@@ -1323,7 +1124,6 @@ function PM() {
                 >
                   Cancelar
                 </button>
-
                 <button
                   type="button"
                   className="pm-btn-guardar"

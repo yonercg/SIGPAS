@@ -3,10 +3,9 @@ import { useSearchParams } from "react-router-dom";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import { useActividades } from "../context/ActividadesContext";
+import { supabase } from "../lib/supabase";
 import { cuadrillas } from "../data/cuadrillas";
 import "./Informes.css";
-
-const CLAVE_INFORMES = "sigpas_informes";
 
 const FILAS_ANOMALIAS_POR_HOJA = 6;
 const ESPACIOS_FOTOGRAFICOS_POR_HOJA = 4;
@@ -48,27 +47,6 @@ function esNodoVacioDePagina(nodo) {
 /* ============================================================
    UTILIDADES
    ============================================================ */
-
-function obtenerInformesGuardados() {
-  try {
-    const datos = localStorage.getItem(CLAVE_INFORMES);
-
-    if (!datos) {
-      return [];
-    }
-
-    const parsed = JSON.parse(datos);
-
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (error) {
-    console.error("Error leyendo informes:", error);
-    return [];
-  }
-}
-
-function guardarInformesLocalStorage(informes) {
-  localStorage.setItem(CLAVE_INFORMES, JSON.stringify(informes));
-}
 
 function insertarMarcadorDeCursor(editor) {
   const seleccion = window.getSelection();
@@ -264,6 +242,48 @@ function dividirEnBloques(items, tamano) {
   }
 
   return bloques.length ? bloques : [[]];
+}
+
+/* ============================================================
+   PERSISTENCIA EN SUPABASE
+   ============================================================ */
+
+async function cargarInformesDesdeSupabase() {
+  const { data, error } = await supabase
+    .from("informes")
+    .select("datos")
+    .order("fecha_creacion", { ascending: false });
+
+  if (error) {
+    throw error;
+  }
+
+  return (data || [])
+    .map((fila) => fila.datos)
+    .filter((informe) => informe && informe.id);
+}
+
+async function persistirInformeEnSupabase(informe) {
+  const { error } = await supabase.from("informes").upsert(
+    {
+      id: informe.id,
+      datos: informe,
+      fecha_actualizacion: new Date().toISOString(),
+    },
+    { onConflict: "id" },
+  );
+
+  if (error) {
+    throw error;
+  }
+}
+
+async function eliminarInformeEnSupabase(id) {
+  const { error } = await supabase.from("informes").delete().eq("id", id);
+
+  if (error) {
+    throw error;
+  }
 }
 
 /* ============================================================
@@ -628,7 +648,9 @@ function Informes() {
   const actividadId = searchParams.get("actividadId");
   const informeId = searchParams.get("informeId");
 
-  const [informes, setInformes] = useState(() => obtenerInformesGuardados());
+  const [informes, setInformes] = useState([]);
+
+  const [cargandoInformes, setCargandoInformes] = useState(true);
 
   const [informeActual, setInformeActual] = useState(null);
 
@@ -684,6 +706,37 @@ function Informes() {
   const [anchoImagen, setAnchoImagen] = useState(60);
   const [fotoRegistroSeleccionada, setFotoRegistroSeleccionada] =
     useState(null);
+
+  /* ============================================================
+     CARGA INICIAL DE INFORMES DESDE SUPABASE
+     ============================================================ */
+
+  useEffect(() => {
+    let activo = true;
+
+    (async () => {
+      try {
+        const lista = await cargarInformesDesdeSupabase();
+        if (!activo) return;
+        setInformes(lista);
+      } catch (error) {
+        console.error("Error cargando informes desde Supabase:", error);
+        if (activo) {
+          window.alert(
+            "No fue posible cargar los informes desde el servidor. Verifique su conexión.",
+          );
+        }
+      } finally {
+        if (activo) {
+          setCargandoInformes(false);
+        }
+      }
+    })();
+
+    return () => {
+      activo = false;
+    };
+  }, []);
 
   /* ============================================================
      AÑOS DISPONIBLES
@@ -760,6 +813,10 @@ function Informes() {
      ============================================================ */
 
   useEffect(() => {
+    if (cargandoInformes) {
+      return undefined;
+    }
+
     let timeoutId;
     const actualizarEstado = (callback) => {
       timeoutId = window.setTimeout(callback, 0);
@@ -783,7 +840,7 @@ function Informes() {
 
       /*
        * Si el informe acaba de ser creado y todavía no se
-       * ha guardado en localStorage, conservamos el informe
+       * ha guardado en Supabase, conservamos el informe
        * actualmente abierto.
        */
       if (informeActual?.id === informeId) {
@@ -843,6 +900,7 @@ function Informes() {
     informes,
     informeActual?.id,
     setSearchParams,
+    cargandoInformes,
   ]);
 
   useEffect(() => {
@@ -2169,7 +2227,7 @@ function Informes() {
      GUARDAR INFORME
      ============================================================ */
 
-  function guardarInforme() {
+  async function guardarInforme() {
     if (!informeActual) {
       return;
     }
@@ -2236,18 +2294,14 @@ function Informes() {
 
     const existe = informes.some((informe) => informe.id === actualizado.id);
 
-    let nuevosInformes;
-
-    if (existe) {
-      nuevosInformes = informes.map((informe) =>
-        informe.id === actualizado.id ? actualizado : informe,
-      );
-    } else {
-      nuevosInformes = [...informes, actualizado];
-    }
+    const nuevosInformes = existe
+      ? informes.map((informe) =>
+          informe.id === actualizado.id ? actualizado : informe,
+        )
+      : [...informes, actualizado];
 
     try {
-      guardarInformesLocalStorage(nuevosInformes);
+      await persistirInformeEnSupabase(actualizado);
 
       setInformes(nuevosInformes);
 
@@ -2258,7 +2312,7 @@ function Informes() {
       console.error("Error guardando informe:", error);
 
       alert(
-        "No fue posible guardar el informe. Es posible que las fotografías sean demasiado grandes.",
+        "No fue posible guardar el informe. Es posible que las fotografías sean demasiado grandes o que exista un problema de conexión con el servidor.",
       );
     }
   }
@@ -2267,21 +2321,26 @@ function Informes() {
      ELIMINAR INFORME
      ============================================================ */
 
-  function eliminarInforme(id) {
+  async function eliminarInforme(id) {
     const confirmar = window.confirm("¿Está seguro de eliminar este informe?");
 
     if (!confirmar) {
       return;
     }
 
-    const nuevosInformes = informes.filter((informe) => informe.id !== id);
+    try {
+      await eliminarInformeEnSupabase(id);
 
-    guardarInformesLocalStorage(nuevosInformes);
+      const nuevosInformes = informes.filter((informe) => informe.id !== id);
 
-    setInformes(nuevosInformes);
-    setInformesSeleccionados((seleccionados) =>
-      seleccionados.filter((seleccionado) => seleccionado !== id),
-    );
+      setInformes(nuevosInformes);
+      setInformesSeleccionados((seleccionados) =>
+        seleccionados.filter((seleccionado) => seleccionado !== id),
+      );
+    } catch (error) {
+      console.error("Error eliminando informe:", error);
+      window.alert("No fue posible eliminar el informe. Intente nuevamente.");
+    }
   }
 
   function alternarInformeSeleccionado(id) {
@@ -3587,7 +3646,12 @@ function Informes() {
          ======================================================== */}
 
       <div className="informes-tabla-contenedor">
-        {informesFiltrados.length === 0 ? (
+        {cargandoInformes ? (
+          <div className="informes-tabla-vacia">
+            <h3>Cargando informes...</h3>
+            <p>Esperando respuesta del servidor.</p>
+          </div>
+        ) : informesFiltrados.length === 0 ? (
           <div className="informes-tabla-vacia">
             <div className="informes-vacio-icono">—</div>
 
