@@ -9,6 +9,10 @@ import "./Informes.css";
 
 const FILAS_ANOMALIAS_POR_HOJA = 6;
 const ESPACIOS_FOTOGRAFICOS_POR_HOJA = 4;
+
+const STORAGE_BUCKET = "sigpas-documentos";
+const URL_EXPIRACION = 60 * 60 * 24; // 24 horas en segundos
+
 const MESES = [
   "Todos",
   "Enero",
@@ -24,6 +28,31 @@ const MESES = [
   "Noviembre",
   "Diciembre",
 ];
+
+const CAMPOS_METADATOS = [
+  "id",
+  "numeroInforme",
+  "estado",
+  "fechaCreacion",
+  "fechaActualizacion",
+  "actividadId",
+  "numeroOrdenTrabajo",
+  "fechaInicio",
+  "fechaFin",
+  "subestacion",
+  "cuadrillaId",
+  "actividadSnapshot",
+];
+
+function extraerMetadatos(informe) {
+  const meta = {};
+  CAMPOS_METADATOS.forEach((campo) => {
+    if (informe[campo] !== undefined && informe[campo] !== null) {
+      meta[campo] = informe[campo];
+    }
+  });
+  return meta;
+}
 
 function quitarMarcadoresDeCursor(html) {
   return html.replace(/<span[^>]*data-caret-marker[^>]*><\/span>/gi, "");
@@ -154,11 +183,6 @@ function obtenerMes(fecha) {
   return fechaObj.getMonth() + 1;
 }
 
-// =========================================================
-// OBTENER NÚMERO DE SEMANA ISO
-// (misma lógica que Programación / Actividades / OTs)
-// =========================================================
-
 function obtenerNumeroSemanaISO(fecha) {
   const fechaUTC = new Date(
     Date.UTC(fecha.getFullYear(), fecha.getMonth(), fecha.getDate()),
@@ -172,10 +196,6 @@ function obtenerNumeroSemanaISO(fecha) {
 
   return Math.ceil(((fechaUTC - inicioAnio) / 86400000 + 1) / 7);
 }
-
-// =========================================================
-// OBTENER SEMANA A PARTIR DE UNA FECHA (string o Date)
-// =========================================================
 
 function obtenerSemanaDeFecha(fecha) {
   if (!fecha) return null;
@@ -194,12 +214,6 @@ function obtenerSemanaDeFecha(fecha) {
 
   return obtenerNumeroSemanaISO(d);
 }
-
-// =========================================================
-// OBTENER SEMANA DE UN INFORME
-// (prioriza la fecha de la actividad para coincidir con
-//  Actividades; si no, usa fechaInicio o fechaCreacion)
-// =========================================================
 
 function obtenerSemanaInforme(informe) {
   if (!informe) return null;
@@ -245,29 +259,124 @@ function dividirEnBloques(items, tamano) {
 }
 
 /* ============================================================
-   PERSISTENCIA EN SUPABASE
+   PERSISTENCIA EN SUPABASE (tabla + storage)
    ============================================================ */
 
 async function cargarInformesDesdeSupabase() {
   const { data, error } = await supabase
     .from("informes")
-    .select("datos")
+    .select("id, metadatos, fecha_creacion, fecha_actualizacion")
     .order("fecha_creacion", { ascending: false });
 
   if (error) {
     throw error;
   }
 
-  return (data || [])
-    .map((fila) => fila.datos)
-    .filter((informe) => informe && informe.id);
+  return (data || []).map((fila) => {
+    const meta = fila.metadatos || {};
+    return {
+      ...meta,
+      id: fila.id,
+      fechaCreacion: meta.fechaCreacion || fila.fecha_creacion,
+      fechaActualizacion: meta.fechaActualizacion || fila.fecha_actualizacion,
+      __contenidoCargado: false,
+    };
+  });
+}
+
+async function subirJsonAStorage(informeId, contenido) {
+  const path = `informes/${informeId}/datos.json`;
+
+  const blob = new Blob([JSON.stringify(contenido, null, 2)], {
+    type: "application/json",
+  });
+
+  const { error } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .upload(path, blob, {
+      contentType: "application/json",
+      upsert: true,
+      cacheControl: "31536000",
+    });
+
+  if (error) {
+    throw error;
+  }
+
+  return path;
+}
+
+async function subirPdfAStorage(informeId, pdfBlob) {
+  const path = `informes/${informeId}/informe.pdf`;
+
+  const { error } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .upload(path, pdfBlob, {
+      contentType: "application/pdf",
+      upsert: true,
+      cacheControl: "31536000",
+    });
+
+  if (error) {
+    throw error;
+  }
+
+  return path;
+}
+
+async function descargarJsonDeStorage(informeId) {
+  const path = `informes/${informeId}/datos.json`;
+
+  const { data, error } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .download(path);
+
+  if (error) {
+    throw error;
+  }
+
+  const texto = await data.text();
+  return JSON.parse(texto);
+}
+
+async function obtenerUrlFirmada(path) {
+  const { data, error } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .createSignedUrl(path, URL_EXPIRACION);
+
+  if (error) {
+    throw error;
+  }
+
+  return data.signedUrl;
+}
+
+async function eliminarArchivosDeStorage(informeId) {
+  const { error } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .remove([
+      `informes/${informeId}/datos.json`,
+      `informes/${informeId}/informe.pdf`,
+    ]);
+
+  if (error) {
+    // No bloqueamos el borrado de la fila si algún archivo no existe.
+    console.warn("No se pudieron eliminar todos los archivos:", error);
+  }
 }
 
 async function persistirInformeEnSupabase(informe) {
+  const metadatos = extraerMetadatos(informe);
+
+  // 1. Subir JSON completo a Storage
+  await subirJsonAStorage(informe.id, informe);
+
+  // 2. Guardar metadatos en la tabla (datos queda null)
   const { error } = await supabase.from("informes").upsert(
     {
       id: informe.id,
-      datos: informe,
+      metadatos,
+      datos: null,
       fecha_actualizacion: new Date().toISOString(),
     },
     { onConflict: "id" },
@@ -279,11 +388,107 @@ async function persistirInformeEnSupabase(informe) {
 }
 
 async function eliminarInformeEnSupabase(id) {
+  // 1. Borrar archivos de Storage
+  await eliminarArchivosDeStorage(id);
+
+  // 2. Borrar fila de la tabla
   const { error } = await supabase.from("informes").delete().eq("id", id);
 
   if (error) {
     throw error;
   }
+}
+
+/* ============================================================
+   GENERAR PDF COMO BLOB (reutilizable)
+   ============================================================ */
+
+async function generarPdfBlob(contenedor) {
+  await document.fonts?.ready;
+
+  const imagenes = Array.from(contenedor.querySelectorAll("img"));
+  await Promise.all(
+    imagenes.map((imagen) =>
+      imagen.complete
+        ? Promise.resolve()
+        : new Promise((resolver) => {
+            imagen.addEventListener("load", resolver, { once: true });
+            imagen.addEventListener("error", resolver, { once: true });
+          }),
+    ),
+  );
+
+  const hojas = Array.from(
+    contenedor.querySelectorAll(
+      ":scope > .informe-hoja, :scope > .informe-hoja-pagina",
+    ),
+  );
+
+  if (!hojas.length) {
+    throw new Error("El informe no contiene hojas para exportar.");
+  }
+
+  const pdf = new jsPDF({
+    orientation: "portrait",
+    unit: "mm",
+    format: "letter",
+    compress: true,
+  });
+
+  const anchoPagina = 215.9;
+  const altoPagina = 279.4;
+
+  for (const [indice, hoja] of hojas.entries()) {
+    const canvas = await html2canvas(hoja, {
+      backgroundColor: "#ffffff",
+      scale: 2,
+      useCORS: true,
+      logging: false,
+      onclone: (documentoClonado) => {
+        documentoClonado
+          .querySelectorAll(
+            ".btn-eliminar-foto, .btn-eliminar-imagen-editor, .registro-fotografico-cargar, .cargar-firma-digital",
+          )
+          .forEach((elemento) => {
+            elemento.style.display = "none";
+          });
+      },
+    });
+
+    let lienzoFinal = canvas;
+    if (canvas.width > canvas.height) {
+      lienzoFinal = document.createElement("canvas");
+      lienzoFinal.width = canvas.height;
+      lienzoFinal.height = canvas.width;
+      const contexto = lienzoFinal.getContext("2d");
+      contexto.translate(lienzoFinal.width, 0);
+      contexto.rotate(Math.PI / 2);
+      contexto.drawImage(canvas, 0, 0);
+    }
+
+    const escala = Math.min(
+      anchoPagina / lienzoFinal.width,
+      altoPagina / lienzoFinal.height,
+    );
+    const anchoImagen = lienzoFinal.width * escala;
+    const altoImagen = lienzoFinal.height * escala;
+
+    if (indice > 0) {
+      pdf.addPage("letter", "portrait");
+    }
+    pdf.addImage(
+      lienzoFinal.toDataURL("image/png"),
+      "PNG",
+      (anchoPagina - anchoImagen) / 2,
+      (altoPagina - altoImagen) / 2,
+      anchoImagen,
+      altoImagen,
+      undefined,
+      "FAST",
+    );
+  }
+
+  return pdf.output("blob");
 }
 
 /* ============================================================
@@ -308,10 +513,6 @@ function convertirDescripcionAntiguaAHtml(texto) {
     .join("");
 }
 
-/*
- * Calcula páginas con el layout real del navegador. Cada resultado representa
- * el contenido exclusivo de una hoja.
- */
 function dividirDescripcionEnPaginas(
   html,
   primeraAltura = 330,
@@ -332,11 +533,6 @@ function dividirDescripcionEnPaginas(
   host.style.left = "-100000px";
   host.style.top = "0";
   host.style.height = `${primeraAltura}px`;
-  /*
-   * El estilo base del editor aplica min-height y height:auto. Si se
-   * conserva durante la medición, el contenedor puede crecer con el
-   * contenido y scrollHeight deja de detectar el salto de página.
-   */
   host.style.minHeight = "0";
   host.style.maxHeight = "none";
   host.style.boxSizing = "border-box";
@@ -383,7 +579,6 @@ function dividirDescripcionEnPaginas(
       return;
     }
 
-    /* Un bloque largo se corta por palabras, nunca se duplica. */
     const texto = nodo.textContent || "";
     if (texto && nodo.nodeType === Node.TEXT_NODE) {
       let parte = "";
@@ -457,11 +652,6 @@ function dividirDescripcionEnPaginas(
   return paginas;
 }
 
-/*
- * La primera hoja contiene información que no existe en las continuaciones.
- * Por eso su editor no puede usar una altura fija: debe reservar también el
- * encabezado, la ayuda y cualquier bloque que siga a la descripción.
- */
 function obtenerAlturaDisponiblePrimeraDescripcion(editor) {
   const hoja = editor?.closest(".informe-hoja");
   const seccion = editor?.closest(".informe-descripcion-seccion");
@@ -528,10 +718,6 @@ function crearInformeInicial(actividad = null) {
     fechaCreacion: ahora,
     fechaActualizacion: ahora,
 
-    /* ========================================================
-       INFORMACIÓN DE LA PRIMERA HOJA
-       ======================================================== */
-
     contrato: "4500010069",
 
     electrificadora: "ELECTRIFICADORA DEL META S.A. E.S.P.",
@@ -546,17 +732,9 @@ function crearInformeInicial(actividad = null) {
 
     reconectador: "",
 
-    /* ========================================================
-       PERSONAL EJECUTOR
-       ======================================================== */
-
     personalEjecutor: ["", "", ""],
 
     cedulas: ["", "", ""],
-
-    /* ========================================================
-       FIRMAS
-       ======================================================== */
 
     elaboradoPor: "",
 
@@ -566,22 +744,9 @@ function crearInformeInicial(actividad = null) {
 
     firmasDigitales: ["", "", ""],
 
-    /* ========================================================
-       DESCRIPCIÓN
-       ======================================================== */
-
     descripcionActividad: "",
 
-    /*
-     * Nuevo formato:
-     * el contenido se almacena como HTML para permitir
-     * texto + imágenes + texto + imágenes.
-     */
     descripcionHtml: "",
-
-    /* ========================================================
-       REPORTE DE ANOMALÍAS
-       ======================================================== */
 
     anomalias: crearAnomaliasIniciales(),
 
@@ -603,19 +768,7 @@ function crearInformeInicial(actividad = null) {
       },
     ],
 
-    /* ========================================================
-       FOTOGRAFÍAS
-       ======================================================== */
-
-    /*
-     * Se conserva este campo para compatibilidad con informes
-     * anteriores de SIGPAS.
-     */
     fotosActividad: [],
-
-    /* ========================================================
-       SNAPSHOT DE ACTIVIDAD
-       ======================================================== */
 
     actividadSnapshot: actividad
       ? {
@@ -654,6 +807,10 @@ function Informes() {
 
   const [informeActual, setInformeActual] = useState(null);
 
+  const [cargandoInformeId, setCargandoInformeId] = useState(null);
+
+  const [guardando, setGuardando] = useState(false);
+
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
 
   const [busqueda, setBusqueda] = useState("");
@@ -670,34 +827,18 @@ function Informes() {
 
   const [informesSeleccionados, setInformesSeleccionados] = useState([]);
 
-  const [colaImpresion, setColaImpresion] = useState([]);
-  const [documentoRenderizado, setDocumentoRenderizado] = useState(false);
-
-  /* ============================================================
-     REFERENCIAS DEL EDITOR
-     ============================================================ */
-
   const editorDescripcionRef = useRef(null);
   const documentoInformeRef = useRef(null);
   const paginasEditorRefs = useRef([]);
   const paginacionDescripcionTimerRef = useRef(null);
 
-  /*
-   * Guarda la posición del cursor para que al hacer clic
-   * en "Insertar fotografía" podamos volver exactamente
-   * al punto donde estaba escribiendo el usuario.
-   */
   const seleccionDescripcionRef = useRef(null);
 
-  /*
-   * Referencia de la imagen actualmente seleccionada.
-   */
   const imagenSeleccionadaRef = useRef(null);
 
-  /*
-   * Evita reinicializar el editor en cada pulsación.
-   */
   const ultimoInformeEditorRef = useRef(null);
+
+  const descargaEnCursoRef = useRef(null);
 
   const [paginasDescripcion, setPaginasDescripcion] = useState([""]);
 
@@ -809,7 +950,7 @@ function Informes() {
   }, [informes, actividades]);
 
   /* ============================================================
-     CARGAR INFORME
+     CARGAR INFORME DESDE URL
      ============================================================ */
 
   useEffect(() => {
@@ -817,236 +958,139 @@ function Informes() {
       return undefined;
     }
 
-    let timeoutId;
-    const actualizarEstado = (callback) => {
-      timeoutId = window.setTimeout(callback, 0);
-    };
-    const cancelarActualizacion = () => {
-      if (timeoutId) {
-        window.clearTimeout(timeoutId);
-      }
-    };
+    let cancelado = false;
 
-    if (informeId) {
-      const encontrado = informes.find((informe) => informe.id === informeId);
-
-      if (encontrado) {
-        actualizarEstado(() => {
-          setInformeActual(encontrado);
+    const ejecutar = async () => {
+      if (informeId) {
+        // Ya está cargado en memoria
+        if (
+          informeActual?.id === informeId &&
+          informeActual.__contenidoCargado
+        ) {
           setMostrarFormulario(true);
-        });
-        return cancelarActualizacion;
-      }
-
-      /*
-       * Si el informe acaba de ser creado y todavía no se
-       * ha guardado en Supabase, conservamos el informe
-       * actualmente abierto.
-       */
-      if (informeActual?.id === informeId) {
-        actualizarEstado(() => setMostrarFormulario(true));
-        return cancelarActualizacion;
-      }
-    }
-
-    if (actividadId) {
-      const actividad = actividades.find(
-        (item) => String(item.id) === String(actividadId),
-      );
-
-      if (actividad) {
-        const informeExistente = informes.find(
-          (informe) => String(informe.actividadId) === String(actividadId),
-        );
-
-        if (informeExistente) {
-          actualizarEstado(() => {
-            setInformeActual(informeExistente);
-            setMostrarFormulario(true);
-          });
-          return cancelarActualizacion;
+          return;
         }
 
-        const nuevo = crearInformeInicial(actividad);
+        // Evitar descargas paralelas del mismo id
+        if (descargaEnCursoRef.current === informeId) {
+          return;
+        }
 
-        actualizarEstado(() => {
+        const encontrado = informes.find((informe) => informe.id === informeId);
+
+        if (encontrado) {
+          descargaEnCursoRef.current = informeId;
+          setCargandoInformeId(informeId);
+
+          try {
+            const contenidoCompleto = await descargarJsonDeStorage(
+              encontrado.id,
+            );
+
+            if (cancelado) return;
+
+            const fusionado = {
+              ...contenidoCompleto,
+              __contenidoCargado: true,
+            };
+
+            setInformeActual(fusionado);
+            setMostrarFormulario(true);
+          } catch (error) {
+            console.error("Error descargando informe:", error);
+            if (!cancelado) {
+              window.alert(
+                "No fue posible abrir el informe. Verifique su conexión.",
+              );
+              setSearchParams({});
+            }
+          } finally {
+            descargaEnCursoRef.current = null;
+            if (!cancelado) setCargandoInformeId(null);
+          }
+          return;
+        }
+      }
+
+      if (actividadId) {
+        const actividad = actividades.find(
+          (item) => String(item.id) === String(actividadId),
+        );
+
+        if (actividad) {
+          const informeExistente = informes.find(
+            (informe) => String(informe.actividadId) === String(actividadId),
+          );
+
+          if (informeExistente) {
+            if (descargaEnCursoRef.current === informeExistente.id) {
+              return;
+            }
+
+            descargaEnCursoRef.current = informeExistente.id;
+            setCargandoInformeId(informeExistente.id);
+
+            try {
+              const contenidoCompleto = await descargarJsonDeStorage(
+                informeExistente.id,
+              );
+
+              if (cancelado) return;
+
+              const fusionado = {
+                ...contenidoCompleto,
+                __contenidoCargado: true,
+              };
+
+              setInformeActual(fusionado);
+              setMostrarFormulario(true);
+            } catch (error) {
+              console.error("Error descargando informe existente:", error);
+              if (!cancelado) {
+                window.alert(
+                  "No fue posible abrir el informe. Verifique su conexión.",
+                );
+              }
+            } finally {
+              descargaEnCursoRef.current = null;
+              if (!cancelado) setCargandoInformeId(null);
+            }
+            return;
+          }
+
+          const nuevo = crearInformeInicial(actividad);
           setInformeActual(nuevo);
           setMostrarFormulario(true);
-          setSearchParams({
-            informeId: nuevo.id,
-          });
-        });
-
-        return cancelarActualizacion;
+          setSearchParams({ informeId: nuevo.id });
+          return;
+        }
       }
-    }
 
-    if (!informeId && !actividadId) {
-      actualizarEstado(() => {
+      if (!informeId && !actividadId) {
         if (window.location.search) {
           return;
         }
 
         setMostrarFormulario(false);
         setInformeActual(null);
-      });
-    }
+      }
+    };
 
-    return cancelarActualizacion;
+    ejecutar();
+
+    return () => {
+      cancelado = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     informeId,
     actividadId,
     actividades,
     informes,
     informeActual?.id,
+    informeActual?.__contenidoCargado,
     setSearchParams,
     cargandoInformes,
-  ]);
-
-  useEffect(() => {
-    if (!mostrarFormulario || !informeActual || !colaImpresion.length) {
-      return undefined;
-    }
-
-    if (
-      colaImpresion[0] !== informeActual.id ||
-      !documentoRenderizado ||
-      !documentoInformeRef.current
-    ) {
-      return undefined;
-    }
-
-    let cancelado = false;
-    const exportarCuandoEsteListo = window.setTimeout(async () => {
-      try {
-        await document.fonts?.ready;
-
-        const imagenes = Array.from(
-          documentoInformeRef.current.querySelectorAll("img"),
-        );
-        await Promise.all(
-          imagenes.map((imagen) =>
-            imagen.complete
-              ? Promise.resolve()
-              : new Promise((resolver) => {
-                  imagen.addEventListener("load", resolver, { once: true });
-                  imagen.addEventListener("error", resolver, { once: true });
-                }),
-          ),
-        );
-
-        const hojas = Array.from(
-          documentoInformeRef.current.querySelectorAll(
-            ":scope > .informe-hoja, :scope > .informe-hoja-pagina",
-          ),
-        );
-        if (!hojas.length) {
-          throw new Error("El informe no contiene hojas para exportar.");
-        }
-
-        const pdf = new jsPDF({
-          orientation: "portrait",
-          unit: "mm",
-          format: "letter",
-          compress: true,
-        });
-        const anchoPagina = 215.9;
-        const altoPagina = 279.4;
-
-        for (const [indice, hoja] of hojas.entries()) {
-          const canvas = await html2canvas(hoja, {
-            backgroundColor: "#ffffff",
-            scale: 2,
-            useCORS: true,
-            logging: false,
-            onclone: (documentoClonado) => {
-              documentoClonado
-                .querySelectorAll(
-                  ".btn-eliminar-foto, .btn-eliminar-imagen-editor, .registro-fotografico-cargar, .cargar-firma-digital",
-                )
-                .forEach((elemento) => {
-                  elemento.style.display = "none";
-                });
-            },
-          });
-
-          let lienzoFinal = canvas;
-          if (canvas.width > canvas.height) {
-            lienzoFinal = document.createElement("canvas");
-            lienzoFinal.width = canvas.height;
-            lienzoFinal.height = canvas.width;
-            const contexto = lienzoFinal.getContext("2d");
-            contexto.translate(lienzoFinal.width, 0);
-            contexto.rotate(Math.PI / 2);
-            contexto.drawImage(canvas, 0, 0);
-          }
-
-          const escala = Math.min(
-            anchoPagina / lienzoFinal.width,
-            altoPagina / lienzoFinal.height,
-          );
-          const anchoImagen = lienzoFinal.width * escala;
-          const altoImagen = lienzoFinal.height * escala;
-
-          if (indice > 0) {
-            pdf.addPage("letter", "portrait");
-          }
-          pdf.addImage(
-            lienzoFinal.toDataURL("image/png"),
-            "PNG",
-            (anchoPagina - anchoImagen) / 2,
-            (altoPagina - altoImagen) / 2,
-            anchoImagen,
-            altoImagen,
-            undefined,
-            "FAST",
-          );
-        }
-
-        const nombre = (
-          informeActual.numeroInforme ||
-          informeActual.id ||
-          "informe"
-        )
-          .replace(/[^\w-]+/g, "-")
-          .replace(/^-+|-+$/g, "");
-        pdf.save(`${nombre || "informe"}.pdf`);
-      } catch (error) {
-        console.error("Error exportando informe a PDF:", error);
-        window.alert(
-          "No fue posible generar el PDF visual del informe. Verifique que el documento esté completamente cargado e inténtelo nuevamente.",
-        );
-      } finally {
-        if (!cancelado) {
-          const colaRestante = colaImpresion.slice(1);
-          const siguiente = informes.find(
-            (informe) => informe.id === colaRestante[0],
-          );
-
-          setColaImpresion(colaRestante);
-          if (siguiente) {
-            setInformeActual(siguiente);
-            setSearchParams({ informeId: siguiente.id });
-          } else {
-            setMostrarFormulario(false);
-            setInformeActual(null);
-            setSearchParams({});
-          }
-        }
-      }
-    }, 250);
-
-    return () => {
-      cancelado = true;
-      window.clearTimeout(exportarCuandoEsteListo);
-    };
-  }, [
-    mostrarFormulario,
-    informeActual,
-    colaImpresion,
-    documentoRenderizado,
-    informes,
-    setSearchParams,
   ]);
 
   /* ============================================================
@@ -1058,11 +1102,6 @@ function Informes() {
       return;
     }
 
-    /*
-     * Solo inicializamos el contenido cuando cambia el informe.
-     * De esta forma React no mueve el cursor mientras el usuario
-     * está escribiendo.
-     */
     const claveEditor = informeActual.id;
     if (ultimoInformeEditorRef.current === claveEditor) {
       return;
@@ -1070,10 +1109,6 @@ function Informes() {
 
     let contenido = informeActual.descripcionHtml || "";
 
-    /*
-     * Compatibilidad con informes creados con la versión anterior
-     * que solamente utilizaban descripcionActividad.
-     */
     if (!contenido && informeActual.descripcionActividad) {
       contenido = convertirDescripcionAntiguaAHtml(
         informeActual.descripcionActividad,
@@ -1110,13 +1145,6 @@ function Informes() {
     [],
   );
 
-  /*
-   * La lista de páginas es la fuente de verdad del editor. Los callbacks de
-   * refs se ejecutan también con null cuando React reconcilia la lista, por lo
-   * que el contenido se sincroniza después del commit y no desde el callback.
-   * Así una página existente no conserva el DOM de la página anterior al crear
-   * una nueva.
-   */
   useLayoutEffect(() => {
     paginasEditorRefs.current.length = paginasDescripcion.length;
 
@@ -1219,10 +1247,6 @@ function Informes() {
     });
   }
 
-  /* ============================================================
-     ACTUALIZAR PERSONAL
-     ============================================================ */
-
   function actualizarPersonal(indice, valor) {
     setInformeActual((actual) => {
       if (!actual) {
@@ -1240,10 +1264,6 @@ function Informes() {
       };
     });
   }
-
-  /* ============================================================
-     ACTUALIZAR CÉDULA
-     ============================================================ */
 
   function actualizarCedula(indice, valor) {
     setInformeActual((actual) => {
@@ -1537,10 +1557,6 @@ function Informes() {
     }
   }
 
-  /* ============================================================
-     RESTAURAR POSICIÓN DEL CURSOR
-     ============================================================ */
-
   function restaurarSeleccionDescripcion() {
     const editor = editorDescripcionRef.current;
 
@@ -1564,10 +1580,6 @@ function Informes() {
       return false;
     }
   }
-
-  /* ============================================================
-     ACTUALIZAR HTML DEL EDITOR
-     ============================================================ */
 
   function obtenerHtmlDePaginas() {
     const editores = paginasEditorRefs.current
@@ -1669,9 +1681,6 @@ function Informes() {
 
         descripcionHtml: html,
 
-        /*
-         * Se conserva también el campo antiguo para compatibilidad.
-         */
         descripcionActividad: texto,
 
         fechaActualizacion: new Date().toISOString(),
@@ -1686,26 +1695,13 @@ function Informes() {
     });
   }
 
-  /* ============================================================
-     MANEJAR CAMBIOS DEL EDITOR
-     ============================================================ */
-
   function manejarInputDescripcion(event) {
     editorDescripcionRef.current = event.currentTarget;
     actualizarDescripcionDesdeEditor(event.currentTarget);
   }
 
-  /* ============================================================
-     MANEJAR TECLAS DEL EDITOR
-     ============================================================ */
-
   function manejarKeyUpDescripcion() {
     guardarSeleccionDescripcion();
-
-    /*
-     * Si el usuario vuelve a escribir después de una imagen,
-     * se conserva el comportamiento natural del editor.
-     */
   }
 
   function seleccionEstaAlInicio(editor) {
@@ -1792,11 +1788,6 @@ function Informes() {
     }
 
     if (event.key === "Enter") {
-      /*
-       * contentEditable ya coloca el cursor en la nueva línea de forma
-       * nativa. Interceptar Enter hacía que la repaginación restaurara
-       * el cursor en la línea anterior.
-       */
       editorDescripcionRef.current = editor;
       return;
     }
@@ -1888,10 +1879,6 @@ function Informes() {
     actualizarDescripcionDesdeEditor();
   }
 
-  /* ============================================================
-     MANEJAR CLIC DENTRO DEL EDITOR
-     ============================================================ */
-
   function manejarClickDescripcion(event) {
     editorDescripcionRef.current = event.currentTarget;
     const objetivo = event.target;
@@ -1911,9 +1898,6 @@ function Informes() {
 
       setImagenSeleccionada(true);
 
-      /*
-       * Dejamos el cursor alrededor de la imagen.
-       */
       const editor = editorDescripcionRef.current;
 
       if (editor) {
@@ -1929,10 +1913,6 @@ function Informes() {
     guardarSeleccionDescripcion();
   }
 
-  /* ============================================================
-     INSERTAR FOTOGRAFÍA EN LA POSICIÓN DEL CURSOR
-     ============================================================ */
-
   function insertarFotografias(event) {
     const archivos = Array.from(event.target.files || []);
 
@@ -1946,9 +1926,6 @@ function Informes() {
       return;
     }
 
-    /*
-     * Guardamos la selección antes de procesar los archivos.
-     */
     guardarSeleccionDescripcion();
 
     archivos.forEach((archivo) => {
@@ -1967,10 +1944,6 @@ function Informes() {
 
         editor.focus();
 
-        /*
-         * Intentamos volver al punto exacto donde estaba
-         * escribiendo el usuario.
-         */
         const seleccionRestaurada = restaurarSeleccionDescripcion();
 
         let rango;
@@ -1983,20 +1956,12 @@ function Informes() {
           }
         }
 
-        /*
-         * Si no existe una selección válida, colocamos la imagen
-         * al final del documento.
-         */
         if (!rango) {
           rango = document.createRange();
           rango.selectNodeContents(editor);
           rango.collapse(false);
         }
 
-        /*
-         * Si la selección está dentro de una imagen, movemos
-         * el cursor después de ella.
-         */
         const nodoContenedor = rango.commonAncestorContainer;
 
         const imagenDentro =
@@ -2011,9 +1976,6 @@ function Informes() {
           rango.collapse(true);
         }
 
-        /*
-         * Creamos la imagen directamente en el documento.
-         */
         const imagen = document.createElement("img");
 
         imagen.src = src;
@@ -2022,21 +1984,12 @@ function Informes() {
         imagen.dataset.sigpasImage = "true";
         imagen.dataset.fotoId = generarIdFoto();
 
-        /*
-         * Tamaño inicial:
-         * 60% del ancho útil del documento.
-         */
         imagen.style.width = "60%";
         imagen.style.height = "auto";
         imagen.style.display = "block";
         imagen.style.margin = "10px auto";
         imagen.style.maxWidth = "100%";
 
-        /*
-         * Insertamos un pequeño espacio después de la imagen
-         * para que el usuario pueda continuar escribiendo
-         * debajo de ella.
-         */
         const salto = document.createElement("div");
 
         salto.innerHTML = "<br />";
@@ -2044,10 +1997,6 @@ function Informes() {
         rango.deleteContents();
         rango.insertNode(imagen);
 
-        /*
-         * Colocamos el cursor inmediatamente después de la
-         * imagen.
-         */
         const nuevoRango = document.createRange();
 
         nuevoRango.setStartAfter(imagen);
@@ -2060,10 +2009,6 @@ function Informes() {
         seleccion.removeAllRanges();
         seleccion.addRange(nuevoRango);
 
-        /*
-         * Si ya había otro contenido después, no lo desplazamos.
-         * El usuario puede continuar escribiendo naturalmente.
-         */
         actualizarDescripcionDesdeEditor();
 
         setImagenSeleccionada(false);
@@ -2073,15 +2018,8 @@ function Informes() {
       lector.readAsDataURL(archivo);
     });
 
-    /*
-     * Permite volver a seleccionar el mismo archivo posteriormente.
-     */
     event.target.value = "";
   }
-
-  /* ============================================================
-     MODIFICAR TAMAÑO DE IMAGEN
-     ============================================================ */
 
   function cambiarTamanoImagen(valor) {
     const imagen = imagenSeleccionadaRef.current;
@@ -2101,9 +2039,6 @@ function Informes() {
 
     setAnchoImagen(nuevoAncho);
 
-    /*
-     * Guardamos el cambio directamente en el HTML del informe.
-     */
     const editor = editorDescripcionRef.current;
 
     if (editor) {
@@ -2126,10 +2061,6 @@ function Informes() {
       });
     }
   }
-
-  /* ============================================================
-     ELIMINAR IMAGEN SELECCIONADA
-     ============================================================ */
 
   function eliminarImagenSeleccionada() {
     const imagen = imagenSeleccionadaRef.current;
@@ -2155,21 +2086,9 @@ function Informes() {
     actualizarDescripcionDesdeEditor();
   }
 
-  /* ============================================================
-     AGREGAR FOTOGRAFÍAS ANTIGUAS
-     ============================================================ */
-
-  /*
-   * Se conserva esta función para compatibilidad con informes
-   * anteriores que todavía tengan fotosActividad.
-   */
   function agregarFotografias(event) {
     insertarFotografias(event);
   }
-
-  /* ============================================================
-     ELIMINAR FOTOGRAFÍA ANTIGUA
-     ============================================================ */
 
   function eliminarFotografia(indice) {
     setInformeActual((actual) => {
@@ -2210,17 +2129,43 @@ function Informes() {
      ABRIR INFORME
      ============================================================ */
 
-  function abrirInforme(informe) {
+  async function abrirInforme(informe) {
     ultimoInformeEditorRef.current = null;
     editorDescripcionRef.current = null;
     seleccionDescripcionRef.current = null;
 
-    setInformeActual(informe);
-    setMostrarFormulario(true);
+    if (informe.__contenidoCargado) {
+      setInformeActual(informe);
+      setMostrarFormulario(true);
+      setSearchParams({ informeId: informe.id });
+      return;
+    }
 
-    setSearchParams({
-      informeId: informe.id,
-    });
+    if (descargaEnCursoRef.current === informe.id) {
+      return;
+    }
+
+    descargaEnCursoRef.current = informe.id;
+    setCargandoInformeId(informe.id);
+
+    try {
+      const contenidoCompleto = await descargarJsonDeStorage(informe.id);
+
+      const fusionado = {
+        ...contenidoCompleto,
+        __contenidoCargado: true,
+      };
+
+      setInformeActual(fusionado);
+      setMostrarFormulario(true);
+      setSearchParams({ informeId: informe.id });
+    } catch (error) {
+      console.error("Error abriendo informe:", error);
+      window.alert("No fue posible abrir el informe. Intente nuevamente.");
+    } finally {
+      descargaEnCursoRef.current = null;
+      setCargandoInformeId(null);
+    }
   }
 
   /* ============================================================
@@ -2228,14 +2173,10 @@ function Informes() {
      ============================================================ */
 
   async function guardarInforme() {
-    if (!informeActual) {
+    if (!informeActual || guardando) {
       return;
     }
 
-    /*
-     * Antes de guardar, obtenemos la versión más reciente
-     * del contenido visual del editor.
-     */
     let descripcionHtml = informeActual.descripcionHtml || "";
 
     let descripcionActividad = informeActual.descripcionActividad || "";
@@ -2251,9 +2192,6 @@ function Informes() {
     const actualizado = {
       ...informeActual,
 
-      /*
-       * Campos de compatibilidad.
-       */
       descripcionActividad,
 
       descripcionHtml,
@@ -2292,28 +2230,56 @@ function Informes() {
       fechaActualizacion: new Date().toISOString(),
     };
 
-    const existe = informes.some((informe) => informe.id === actualizado.id);
-
-    const nuevosInformes = existe
-      ? informes.map((informe) =>
-          informe.id === actualizado.id ? actualizado : informe,
-        )
-      : [...informes, actualizado];
+    setGuardando(true);
 
     try {
+      // 1. Persistir JSON + metadatos en Supabase
       await persistirInformeEnSupabase(actualizado);
 
+      // 2. Generar y subir PDF (Opción B: si falla, no bloqueamos)
+      let pdfSubido = false;
+      try {
+        if (documentoInformeRef.current) {
+          // Damos un tick para que el DOM refleje los últimos cambios
+          await new Promise((resolver) => window.setTimeout(resolver, 50));
+
+          const pdfBlob = await generarPdfBlob(documentoInformeRef.current);
+          await subirPdfAStorage(actualizado.id, pdfBlob);
+          pdfSubido = true;
+        }
+      } catch (errorPdf) {
+        console.warn("No se pudo generar/subir el PDF:", errorPdf);
+      }
+
+      // 3. Actualizar estado local
+      const metadatos = extraerMetadatos(actualizado);
+      const informeLista = { ...metadatos, __contenidoCargado: true };
+
+      const existe = informes.some((informe) => informe.id === actualizado.id);
+
+      const nuevosInformes = existe
+        ? informes.map((informe) =>
+            informe.id === actualizado.id ? informeLista : informe,
+          )
+        : [...informes, informeLista];
+
       setInformes(nuevosInformes);
+      setInformeActual({ ...actualizado, __contenidoCargado: true });
 
-      setInformeActual(actualizado);
-
-      alert("Informe guardado correctamente.");
+      if (pdfSubido) {
+        alert("Informe guardado correctamente.");
+      } else {
+        alert(
+          "Informe guardado correctamente. Nota: el PDF no se pudo generar en este momento, se generará cuando lo descargue.",
+        );
+      }
     } catch (error) {
       console.error("Error guardando informe:", error);
-
       alert(
-        "No fue posible guardar el informe. Es posible que las fotografías sean demasiado grandes o que exista un problema de conexión con el servidor.",
+        "No fue posible guardar el informe. Verifique su conexión e intente nuevamente.",
       );
+    } finally {
+      setGuardando(false);
     }
   }
 
@@ -2363,19 +2329,58 @@ function Informes() {
     );
   }
 
-  function descargarInformesSeleccionados() {
-    const ids = informes
-      .filter((informe) => informesSeleccionados.includes(informe.id))
-      .map((informe) => informe.id);
+  /* ============================================================
+     DESCARGAR PDFs DE STORAGE
+     ============================================================ */
 
-    if (!ids.length) {
+  async function descargarInformesSeleccionados() {
+    const seleccionados = informes.filter((informe) =>
+      informesSeleccionados.includes(informe.id),
+    );
+
+    if (!seleccionados.length) {
       return;
     }
 
-    setColaImpresion(ids);
-    setInformeActual(informes.find((informe) => informe.id === ids[0]));
-    setMostrarFormulario(true);
-    setSearchParams({ informeId: ids[0] });
+    let descargados = 0;
+    let fallidos = 0;
+
+    for (const informe of seleccionados) {
+      try {
+        const path = `informes/${informe.id}/informe.pdf`;
+        const url = await obtenerUrlFirmada(path);
+
+        const nombre = (informe.numeroInforme || informe.id || "informe")
+          .replace(/[^\w-]+/g, "-")
+          .replace(/^-+|-+$/g, "");
+
+        const enlace = document.createElement("a");
+        enlace.href = url;
+        enlace.download = `${nombre || "informe"}.pdf`;
+        enlace.target = "_blank";
+        enlace.rel = "noopener noreferrer";
+        document.body.appendChild(enlace);
+        enlace.click();
+        document.body.removeChild(enlace);
+
+        descargados += 1;
+
+        // Pequeña pausa entre descargas para no saturar el navegador
+        await new Promise((resolver) => window.setTimeout(resolver, 300));
+      } catch (error) {
+        console.warn(
+          `No se pudo descargar el PDF del informe ${informe.id}:`,
+          error,
+        );
+        fallidos += 1;
+      }
+    }
+
+    if (fallidos > 0) {
+      window.alert(
+        `Se descargaron ${descargados} PDF(s). ${fallidos} no pudieron descargarse porque no tienen PDF guardado (abra el informe y guárdelo para generarlo).`,
+      );
+    }
   }
 
   /* ============================================================
@@ -2466,10 +2471,6 @@ function Informes() {
     );
     return (
       <div className="informes-editor">
-        {/* ======================================================
-            BARRA SUPERIOR — NO SALE EN LA IMPRESIÓN
-           ====================================================== */}
-
         <div className="informes-editor-barra">
           <button
             type="button"
@@ -2489,8 +2490,9 @@ function Informes() {
             type="button"
             className="btn-editor-guardar"
             onClick={guardarInforme}
+            disabled={guardando}
           >
-            Guardar
+            {guardando ? "Guardando..." : "Guardar"}
           </button>
 
           <div className="descripcion-herramientas descripcion-herramientas-fija">
@@ -2574,24 +2576,13 @@ function Informes() {
           </div>
         </div>
 
-        {/* ======================================================
-            DOCUMENTO
-           ====================================================== */}
-
         <div
           className="informe-documento-contenedor"
           ref={(elemento) => {
             documentoInformeRef.current = elemento;
-            if (elemento) {
-              setDocumentoRenderizado(true);
-            }
           }}
         >
           <div className="informe-hoja">
-            {/* ==================================================
-                ENCABEZADO
-               ================================================== */}
-
             <table className="informe-encabezado">
               <tbody>
                 <tr>
@@ -2640,15 +2631,7 @@ function Informes() {
               </tbody>
             </table>
 
-            {/* ==================================================
-                PRIMERA HOJA — INFORMACIÓN GENERAL
-               ================================================== */}
-
             <section className="informe-primera-seccion">
-              {/* =================================================
-                  CONTRATO
-                 ================================================= */}
-
               <div className="fila-completa">
                 <div className="celda-contrato">
                   CONTRATO DE MANTENIMIENTO DE SUBESTACIONES DEL META
@@ -2656,19 +2639,11 @@ function Informes() {
                 </div>
               </div>
 
-              {/* =================================================
-                  ELECTRIFICADORA
-                 ================================================= */}
-
               <div className="fila-completa">
                 <div className="celda-electrificadora">
                   ELECTRIFICADORA DEL META S.A. E.S.P.
                 </div>
               </div>
-
-              {/* =================================================
-                  INFORME / FECHA INICIO
-                 ================================================= */}
 
               <div className="fila-cuatro-columnas">
                 <div className="celda-label">NO DE INFORME</div>
@@ -2696,10 +2671,6 @@ function Informes() {
                   />
                 </div>
               </div>
-
-              {/* =================================================
-                  ORDEN DE TRABAJO / FECHA FIN
-                 ================================================= */}
 
               <div className="fila-cuatro-columnas">
                 <div className="celda-label celda-label-doble">
@@ -2736,10 +2707,6 @@ function Informes() {
                 </div>
               </div>
 
-              {/* =================================================
-                  SUBESTACIÓN / RECONECTADOR
-                 ================================================= */}
-
               <div className="fila-cuatro-columnas">
                 <div className="celda-label">SUBESTACIÓN:</div>
 
@@ -2767,10 +2734,6 @@ function Informes() {
                   />
                 </div>
               </div>
-
-              {/* =================================================
-                  PERSONAL EJECUTOR / CÉDULA
-                 ================================================= */}
 
               <div className="fila-personal">
                 <div className="celda-personal-titulo">
@@ -2815,10 +2778,6 @@ function Informes() {
                   ))}
                 </div>
               </div>
-
-              {/* =================================================
-                  ELABORADO / REVISADO / APROBADO
-                 ================================================= */}
 
               <div className="fila-firmas-nombres">
                 <div className="bloque-firma-nombre">
@@ -2865,10 +2824,6 @@ function Informes() {
                 </div>
               </div>
 
-              {/* =================================================
-                  ESPACIOS PARA FIRMA
-                 ================================================= */}
-
               <div className="fila-firmas">
                 {["firma", "firma", "FIRMA"].map((etiqueta, indice) => (
                   <div className="espacio-firma" key={etiqueta + indice}>
@@ -2901,20 +2856,8 @@ function Informes() {
               </div>
             </section>
 
-            {/* ==================================================
-                DESCRIPCIÓN DE ACTIVIDAD
-               ================================================== */}
-
             <section className="informe-descripcion-seccion">
               <div className="descripcion-titulo">DESCRIPCIÓN DE ACTIVIDAD</div>
-
-              {/* =================================================
-                  BARRA DEL EDITOR
-                 ================================================= */}
-
-              {/* =================================================
-                  ÁREA DE ESCRITURA
-                 ================================================= */}
 
               <div
                 ref={(elemento) => {
@@ -2942,10 +2885,6 @@ function Informes() {
                 onClick={manejarClickDescripcion}
               ></div>
 
-              {/* =================================================
-                  AYUDA
-                 ================================================= */}
-
               <div className="descripcion-ayuda-editor">
                 <span>
                   Puede escribir texto, insertar fotografías en la posición del
@@ -2955,10 +2894,6 @@ function Informes() {
                 <span>Para cambiar el tamaño, seleccione una fotografía.</span>
               </div>
             </section>
-
-            {/* ==================================================
-                COMPATIBILIDAD CON FOTOGRAFÍAS ANTIGUAS
-               ================================================== */}
 
             {informeActual.fotosActividad?.length > 0 && (
               <section className="fotos-antiguas-compatibilidad">
@@ -2985,10 +2920,6 @@ function Informes() {
                 </div>
               </section>
             )}
-
-            {/* ==================================================
-                ESPACIO RESTANTE
-               ================================================== */}
 
             <div className="informe-area-blanca"></div>
           </div>
@@ -3509,10 +3440,6 @@ function Informes() {
         </button>
       </div>
 
-      {/* ========================================================
-          FILTROS
-         ======================================================== */}
-
       <div className="informes-filtros">
         <div className="campo-filtro campo-busqueda">
           <label>Buscar</label>
@@ -3641,10 +3568,6 @@ function Informes() {
         </button>
       </div>
 
-      {/* ========================================================
-          TABLA
-         ======================================================== */}
-
       <div className="informes-tabla-contenedor">
         {cargandoInformes ? (
           <div className="informes-tabla-vacia">
@@ -3697,6 +3620,7 @@ function Informes() {
             <tbody>
               {informesFiltrados.map((informe) => {
                 const semanaInforme = obtenerSemanaInforme(informe);
+                const estaCargando = cargandoInformeId === informe.id;
 
                 return (
                   <tr key={informe.id}>
@@ -3746,14 +3670,16 @@ function Informes() {
                           type="button"
                           className="btn-tabla"
                           onClick={() => abrirInforme(informe)}
+                          disabled={estaCargando}
                         >
-                          Abrir
+                          {estaCargando ? "Abriendo..." : "Abrir"}
                         </button>
 
                         <button
                           type="button"
                           className="btn-tabla btn-tabla-eliminar"
                           onClick={() => eliminarInforme(informe.id)}
+                          disabled={estaCargando}
                         >
                           Eliminar
                         </button>
