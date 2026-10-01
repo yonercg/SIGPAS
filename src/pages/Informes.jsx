@@ -1,4 +1,11 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  Fragment,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useSearchParams } from "react-router-dom";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
@@ -11,7 +18,6 @@ const FILAS_ANOMALIAS_POR_HOJA = 6;
 const ESPACIOS_FOTOGRAFICOS_POR_HOJA = 4;
 
 const STORAGE_BUCKET = "sigpas-documentos";
-const URL_EXPIRACION = 60 * 60 * 24; // 24 horas en segundos
 
 const MESES = [
   "Todos",
@@ -327,28 +333,55 @@ async function subirPdfAStorage(informeId, pdfBlob) {
 async function descargarJsonDeStorage(informeId) {
   const path = `informes/${informeId}/datos.json`;
 
-  const { data, error } = await supabase.storage
-    .from(STORAGE_BUCKET)
-    .download(path);
+  const descarga = (async () => {
+    const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(path);
 
-  if (error) {
-    throw error;
-  }
+    // 🔧 FIX: agregamos un query param único (?t=timestamp) para evitar
+    // que la caché del navegador o de la CDN sirva la versión vieja del
+    // JSON después de guardar modificaciones.
+    const url = `${data.publicUrl}?t=${Date.now()}`;
 
-  const texto = await data.text();
-  return JSON.parse(texto);
+    const response = await fetch(url, {
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `Error descargando JSON: ${response.status} ${response.statusText}`,
+      );
+    }
+
+    return response.json();
+  })();
+
+  const timeout = new Promise((_, reject) =>
+    setTimeout(
+      () => reject(new Error("Timeout descargando informe (0.5s)")),
+      500,
+    ),
+  );
+
+  return Promise.race([descarga, timeout]);
 }
 
-async function obtenerUrlFirmada(path) {
-  const { data, error } = await supabase.storage
-    .from(STORAGE_BUCKET)
-    .createSignedUrl(path, URL_EXPIRACION);
+function obtenerUrlPublica(path) {
+  const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(path);
+  return data.publicUrl;
+}
 
-  if (error) {
-    throw error;
+async function existePdfEnStorage(informeId) {
+  const path = `informes/${informeId}/informe.pdf`;
+  const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(path);
+
+  try {
+    const response = await fetch(data.publicUrl, {
+      method: "HEAD",
+      cache: "no-store",
+    });
+    return response.ok;
+  } catch {
+    return false;
   }
-
-  return data.signedUrl;
 }
 
 async function eliminarArchivosDeStorage(informeId) {
@@ -360,7 +393,6 @@ async function eliminarArchivosDeStorage(informeId) {
     ]);
 
   if (error) {
-    // No bloqueamos el borrado de la fila si algún archivo no existe.
     console.warn("No se pudieron eliminar todos los archivos:", error);
   }
 }
@@ -368,10 +400,8 @@ async function eliminarArchivosDeStorage(informeId) {
 async function persistirInformeEnSupabase(informe) {
   const metadatos = extraerMetadatos(informe);
 
-  // 1. Subir JSON completo a Storage
   await subirJsonAStorage(informe.id, informe);
 
-  // 2. Guardar metadatos en la tabla (datos queda null)
   const { error } = await supabase.from("informes").upsert(
     {
       id: informe.id,
@@ -388,10 +418,8 @@ async function persistirInformeEnSupabase(informe) {
 }
 
 async function eliminarInformeEnSupabase(id) {
-  // 1. Borrar archivos de Storage
   await eliminarArchivosDeStorage(id);
 
-  // 2. Borrar fila de la tabla
   const { error } = await supabase.from("informes").delete().eq("id", id);
 
   if (error) {
@@ -790,6 +818,10 @@ function crearInformeInicial(actividad = null) {
 }
 
 /* ============================================================
+   ⬇️ PARTE 2 EMPIEZA AQUÍ ⬇️
+   Pega INMEDIATAMENTE debajo de esta línea la PARTE 2
+   ============================================================ */
+/* ============================================================
    COMPONENTE
    ============================================================ */
 
@@ -811,6 +843,8 @@ function Informes() {
 
   const [guardando, setGuardando] = useState(false);
 
+  const [generandoPdf, setGenerandoPdf] = useState(false);
+
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
 
   const [busqueda, setBusqueda] = useState("");
@@ -825,7 +859,17 @@ function Informes() {
 
   const [filtroCuadrilla, setFiltroCuadrilla] = useState("Todas");
 
+  // ✅ CORRECCIÓN: esta línea faltaba y causaba el error
+  // "informesSeleccionados is not defined".
   const [informesSeleccionados, setInformesSeleccionados] = useState([]);
+
+  // 🔧 OPCIÓN 3: cola de informes sin PDF para generar en el momento.
+  const [colaPdfGeneracion, setColaPdfGeneracion] = useState([]);
+  const [generandoPdfLote, setGenerandoPdfLote] = useState({
+    activo: false,
+    total: 0,
+    actual: 0,
+  });
 
   const editorDescripcionRef = useRef(null);
   const documentoInformeRef = useRef(null);
@@ -839,6 +883,21 @@ function Informes() {
   const ultimoInformeEditorRef = useRef(null);
 
   const descargaEnCursoRef = useRef(null);
+
+  const guardandoRef = useRef(false);
+
+  const ultimoCambioProgramaticoRef = useRef(0);
+
+  // 🔧 FIX: guarda el último HTML procesado. Si el HTML no cambió,
+  // no procesamos ni actualizamos estado (corta el loop sin bloquear
+  // los inputs reales del usuario).
+  const ultimoHtmlProcesadoRef = useRef("");
+
+  const timeoutCargandoRef = useRef(null);
+
+  // 🔧 FIX: evita crear múltiples informes para la misma actividad
+  // cuando setSearchParams tarda en actualizar la URL.
+  const actividadCreadaRef = useRef(null);
 
   const [paginasDescripcion, setPaginasDescripcion] = useState([""]);
 
@@ -878,6 +937,138 @@ function Informes() {
       activo = false;
     };
   }, []);
+
+  /* ============================================================
+     🔧 OPCIÓN 3: procesar la cola de PDFs que hay que generar.
+     ============================================================ */
+
+  // Paso A: cuando hay un id en la cola, abrir ese informe.
+  useEffect(() => {
+    if (!generandoPdfLote.activo) return;
+    if (colaPdfGeneracion.length === 0) return;
+
+    const siguienteId = colaPdfGeneracion[0];
+
+    if (
+      !informeActual ||
+      informeActual.id !== siguienteId ||
+      !informeActual.__contenidoCargado
+    ) {
+      setSearchParams({ informeId: siguienteId });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    colaPdfGeneracion,
+    generandoPdfLote.activo,
+    informeActual?.id,
+    informeActual?.__contenidoCargado,
+  ]);
+
+  // Paso B: cuando el informe está renderizado, generar el PDF, subirlo,
+  // descargarlo y pasar al siguiente.
+  useEffect(() => {
+    if (!generandoPdfLote.activo) return;
+    if (colaPdfGeneracion.length === 0) return;
+
+    const siguienteId = colaPdfGeneracion[0];
+    if (
+      !informeActual ||
+      informeActual.id !== siguienteId ||
+      !informeActual.__contenidoCargado
+    ) {
+      return;
+    }
+
+    if (!documentoInformeRef.current) return;
+
+    let cancelado = false;
+
+    const procesar = async () => {
+      try {
+        window.scrollTo(0, 0);
+        await new Promise((r) => window.setTimeout(r, 600));
+
+        const pdfBlob = await generarPdfBlob(documentoInformeRef.current);
+        await subirPdfAStorage(informeActual.id, pdfBlob);
+
+        const path = `informes/${informeActual.id}/informe.pdf`;
+        const url = obtenerUrlPublica(path);
+
+        const nombre = (
+          informeActual.numeroInforme ||
+          informeActual.id ||
+          "informe"
+        )
+          .replace(/[^\w-]+/g, "-")
+          .replace(/^-+|-+$/g, "");
+
+        const enlace = document.createElement("a");
+        enlace.href = url;
+        enlace.download = `${nombre || "informe"}.pdf`;
+        enlace.target = "_blank";
+        enlace.rel = "noopener noreferrer";
+        document.body.appendChild(enlace);
+        enlace.click();
+        document.body.removeChild(enlace);
+      } catch (error) {
+        console.error("Error generando PDF en lote:", error);
+      } finally {
+        if (!cancelado) {
+          setColaPdfGeneracion((cola) => cola.slice(1));
+          setGenerandoPdfLote((info) => ({
+            ...info,
+            actual: info.actual + 1,
+          }));
+        }
+      }
+    };
+
+    procesar();
+
+    return () => {
+      cancelado = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    colaPdfGeneracion,
+    generandoPdfLote.activo,
+    informeActual?.id,
+    informeActual?.__contenidoCargado,
+  ]);
+
+  // Paso C: cuando la cola se vacía, cerrar el modo y volver a la lista.
+  useEffect(() => {
+    if (!generandoPdfLote.activo) return;
+    if (colaPdfGeneracion.length > 0) return;
+
+    setGenerandoPdfLote({ activo: false, total: 0, actual: 0 });
+    setMostrarFormulario(false);
+    setInformeActual(null);
+    setSearchParams({});
+    setInformesSeleccionados([]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [colaPdfGeneracion, generandoPdfLote.activo]);
+
+  /* ============================================================
+     TIMEOUT DE SEGURIDAD PARA "ABRIENDO..."
+     (un solo useEffect, no dos como antes)
+     ============================================================ */
+
+  useEffect(() => {
+    if (cargandoInformeId) {
+      timeoutCargandoRef.current = window.setTimeout(() => {
+        setCargandoInformeId(null);
+        descargaEnCursoRef.current = null;
+      }, 500);
+    }
+
+    return () => {
+      if (timeoutCargandoRef.current) {
+        window.clearTimeout(timeoutCargandoRef.current);
+        timeoutCargandoRef.current = null;
+      }
+    };
+  }, [cargandoInformeId]);
 
   /* ============================================================
      AÑOS DISPONIBLES
@@ -962,7 +1153,6 @@ function Informes() {
 
     const ejecutar = async () => {
       if (informeId) {
-        // Ya está cargado en memoria
         if (
           informeActual?.id === informeId &&
           informeActual.__contenidoCargado
@@ -971,7 +1161,6 @@ function Informes() {
           return;
         }
 
-        // Evitar descargas paralelas del mismo id
         if (descargaEnCursoRef.current === informeId) {
           return;
         }
@@ -1058,10 +1247,24 @@ function Informes() {
             return;
           }
 
-          const nuevo = crearInformeInicial(actividad);
+          // 🔧 FIX: si ya creamos un informe para esta actividad en esta
+          // sesión, no crear otro. Esto evita el duplicado cuando el
+          // useEffect se dispara varias veces por el timing de
+          // setSearchParams.
+          if (actividadCreadaRef.current === actividadId) {
+            return;
+          }
+          actividadCreadaRef.current = actividadId;
+
+          const nuevo = {
+            ...crearInformeInicial(actividad),
+            __contenidoCargado: true,
+          };
           setInformeActual(nuevo);
           setMostrarFormulario(true);
-          setSearchParams({ informeId: nuevo.id });
+          if (searchParams.get("informeId") !== nuevo.id) {
+            setSearchParams({ informeId: nuevo.id });
+          }
           return;
         }
       }
@@ -1115,6 +1318,9 @@ function Informes() {
       );
     }
 
+    // 🔧 FIX: guardamos el HTML inicial del informe cargado.
+    ultimoHtmlProcesadoRef.current = contenido;
+
     window.requestAnimationFrame(() => {
       const editor = editorDescripcionRef.current;
       if (editor) {
@@ -1134,7 +1340,8 @@ function Informes() {
 
     setImagenSeleccionada(false);
     imagenSeleccionadaRef.current = null;
-  }, [mostrarFormulario, informeActual]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mostrarFormulario, informeActual?.id]);
 
   useEffect(
     () => () => {
@@ -1147,6 +1354,8 @@ function Informes() {
 
   useLayoutEffect(() => {
     paginasEditorRefs.current.length = paginasDescripcion.length;
+
+    ultimoCambioProgramaticoRef.current = Date.now();
 
     paginasDescripcion.forEach((contenido, indice) => {
       const editor = paginasEditorRefs.current[indice];
@@ -1656,6 +1865,17 @@ function Informes() {
     const tieneMarcador = insertarMarcadorDeCursor(editorOrigen);
     const htmlConMarcador = obtenerHtmlDePaginas();
     const html = quitarMarcadoresDeCursor(htmlConMarcador);
+
+    // 🔧 FIX: si el HTML no cambió, no procesamos. Esto corta el loop
+    // sin bloquear los inputs reales del usuario.
+    if (html === ultimoHtmlProcesadoRef.current) {
+      if (tieneMarcador) {
+        window.requestAnimationFrame(() => restaurarCursorDesdeMarcador());
+      }
+      return;
+    }
+    ultimoHtmlProcesadoRef.current = html;
+
     const texto = paginasEditorRefs.current
       .slice(0, paginasDescripcion.length)
       .filter(Boolean)
@@ -1696,6 +1916,8 @@ function Informes() {
   }
 
   function manejarInputDescripcion(event) {
+    if (!event.currentTarget) return;
+
     editorDescripcionRef.current = event.currentTarget;
     actualizarDescripcionDesdeEditor(event.currentTarget);
   }
@@ -2113,7 +2335,10 @@ function Informes() {
      ============================================================ */
 
   function nuevoInforme() {
-    const nuevo = crearInformeInicial();
+    const nuevo = {
+      ...crearInformeInicial(),
+      __contenidoCargado: true,
+    };
 
     ultimoInformeEditorRef.current = null;
 
@@ -2134,8 +2359,8 @@ function Informes() {
     editorDescripcionRef.current = null;
     seleccionDescripcionRef.current = null;
 
-    if (informe.__contenidoCargado) {
-      setInformeActual(informe);
+    if (informeActual?.id === informe.id && informeActual.__contenidoCargado) {
+      setInformeActual(informeActual);
       setMostrarFormulario(true);
       setSearchParams({ informeId: informe.id });
       return;
@@ -2169,13 +2394,16 @@ function Informes() {
   }
 
   /* ============================================================
-     GUARDAR INFORME
+     GUARDAR INFORME (solo JSON + metadatos, rápido, sin freeze)
      ============================================================ */
 
   async function guardarInforme() {
-    if (!informeActual || guardando) {
+    if (!informeActual || guardandoRef.current) {
       return;
     }
+
+    guardandoRef.current = true;
+    setGuardando(true);
 
     let descripcionHtml = informeActual.descripcionHtml || "";
 
@@ -2230,30 +2458,11 @@ function Informes() {
       fechaActualizacion: new Date().toISOString(),
     };
 
-    setGuardando(true);
-
     try {
-      // 1. Persistir JSON + metadatos en Supabase
       await persistirInformeEnSupabase(actualizado);
 
-      // 2. Generar y subir PDF (Opción B: si falla, no bloqueamos)
-      let pdfSubido = false;
-      try {
-        if (documentoInformeRef.current) {
-          // Damos un tick para que el DOM refleje los últimos cambios
-          await new Promise((resolver) => window.setTimeout(resolver, 50));
-
-          const pdfBlob = await generarPdfBlob(documentoInformeRef.current);
-          await subirPdfAStorage(actualizado.id, pdfBlob);
-          pdfSubido = true;
-        }
-      } catch (errorPdf) {
-        console.warn("No se pudo generar/subir el PDF:", errorPdf);
-      }
-
-      // 3. Actualizar estado local
       const metadatos = extraerMetadatos(actualizado);
-      const informeLista = { ...metadatos, __contenidoCargado: true };
+      const informeLista = { ...metadatos, __contenidoCargado: false };
 
       const existe = informes.some((informe) => informe.id === actualizado.id);
 
@@ -2266,20 +2475,51 @@ function Informes() {
       setInformes(nuevosInformes);
       setInformeActual({ ...actualizado, __contenidoCargado: true });
 
-      if (pdfSubido) {
-        alert("Informe guardado correctamente.");
-      } else {
-        alert(
-          "Informe guardado correctamente. Nota: el PDF no se pudo generar en este momento, se generará cuando lo descargue.",
-        );
-      }
+      alert("Informe guardado correctamente.");
     } catch (error) {
       console.error("Error guardando informe:", error);
       alert(
         "No fue posible guardar el informe. Verifique su conexión e intente nuevamente.",
       );
     } finally {
+      guardandoRef.current = false;
       setGuardando(false);
+    }
+  }
+
+  /* ============================================================
+     GENERAR PDF (botón aparte, puede tardar unos segundos)
+     ============================================================ */
+
+  async function generarYSubirPdf() {
+    if (!informeActual || generandoPdf) {
+      return;
+    }
+
+    if (!documentoInformeRef.current) {
+      window.alert("No hay informe visible para generar el PDF.");
+      return;
+    }
+
+    setGenerandoPdf(true);
+
+    try {
+      window.scrollTo(0, 0);
+
+      await new Promise((resolver) => window.setTimeout(resolver, 300));
+
+      const pdfBlob = await generarPdfBlob(documentoInformeRef.current);
+
+      await subirPdfAStorage(informeActual.id, pdfBlob);
+
+      alert("PDF generado y guardado correctamente.");
+    } catch (error) {
+      console.error("Error generando/subiendo PDF:", error);
+      window.alert(
+        "No fue posible generar el PDF. Verifique que el informe esté completamente cargado e intente nuevamente.",
+      );
+    } finally {
+      setGenerandoPdf(false);
     }
   }
 
@@ -2342,44 +2582,47 @@ function Informes() {
       return;
     }
 
-    let descargados = 0;
-    let fallidos = 0;
+    const conPdf = [];
+    const sinPdf = [];
 
     for (const informe of seleccionados) {
-      try {
-        const path = `informes/${informe.id}/informe.pdf`;
-        const url = await obtenerUrlFirmada(path);
-
-        const nombre = (informe.numeroInforme || informe.id || "informe")
-          .replace(/[^\w-]+/g, "-")
-          .replace(/^-+|-+$/g, "");
-
-        const enlace = document.createElement("a");
-        enlace.href = url;
-        enlace.download = `${nombre || "informe"}.pdf`;
-        enlace.target = "_blank";
-        enlace.rel = "noopener noreferrer";
-        document.body.appendChild(enlace);
-        enlace.click();
-        document.body.removeChild(enlace);
-
-        descargados += 1;
-
-        // Pequeña pausa entre descargas para no saturar el navegador
-        await new Promise((resolver) => window.setTimeout(resolver, 300));
-      } catch (error) {
-        console.warn(
-          `No se pudo descargar el PDF del informe ${informe.id}:`,
-          error,
-        );
-        fallidos += 1;
+      const existe = await existePdfEnStorage(informe.id);
+      if (existe) {
+        conPdf.push(informe);
+      } else {
+        sinPdf.push(informe);
       }
     }
 
-    if (fallidos > 0) {
-      window.alert(
-        `Se descargaron ${descargados} PDF(s). ${fallidos} no pudieron descargarse porque no tienen PDF guardado (abra el informe y guárdelo para generarlo).`,
-      );
+    for (const informe of conPdf) {
+      const path = `informes/${informe.id}/informe.pdf`;
+      const url = obtenerUrlPublica(path);
+
+      const nombre = (informe.numeroInforme || informe.id || "informe")
+        .replace(/[^\w-]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+
+      const enlace = document.createElement("a");
+      enlace.href = url;
+      enlace.download = `${nombre || "informe"}.pdf`;
+      enlace.target = "_blank";
+      enlace.rel = "noopener noreferrer";
+      document.body.appendChild(enlace);
+      enlace.click();
+      document.body.removeChild(enlace);
+
+      await new Promise((r) => window.setTimeout(r, 300));
+    }
+
+    if (sinPdf.length > 0) {
+      setGenerandoPdfLote({
+        activo: true,
+        total: sinPdf.length,
+        actual: 0,
+      });
+      setColaPdfGeneracion(sinPdf.map((i) => i.id));
+    } else {
+      setInformesSeleccionados([]);
     }
   }
 
@@ -2406,6 +2649,9 @@ function Informes() {
     ultimoInformeEditorRef.current = null;
     imagenSeleccionadaRef.current = null;
     setImagenSeleccionada(false);
+    // 🔧 FIX: resetear la guardia para que la próxima vez que se entre
+    // desde una actividad se pueda crear un informe nuevo.
+    actividadCreadaRef.current = null;
     setSearchParams({});
   }
 
@@ -2413,7 +2659,7 @@ function Informes() {
      RENDER — EDITOR
      ============================================================ */
 
-  if (mostrarFormulario && informeActual) {
+  if ((mostrarFormulario || generandoPdfLote.activo) && informeActual) {
     const descripcionTieneContenido = Boolean(
       informeActual.descripcionHtml || informeActual.descripcionActividad,
     );
@@ -2490,9 +2736,19 @@ function Informes() {
             type="button"
             className="btn-editor-guardar"
             onClick={guardarInforme}
-            disabled={guardando}
+            disabled={guardando || generandoPdf}
           >
             {guardando ? "Guardando..." : "Guardar"}
+          </button>
+
+          <button
+            type="button"
+            className="btn-editor-guardar"
+            onClick={generarYSubirPdf}
+            disabled={guardando || generandoPdf}
+            style={{ marginLeft: "8px" }}
+          >
+            {generandoPdf ? "Generando PDF..." : "Generar PDF"}
           </button>
 
           <div className="descripcion-herramientas descripcion-herramientas-fija">
@@ -3154,11 +3410,10 @@ function Informes() {
             const indiceInicial = indicePagina * ESPACIOS_FOTOGRAFICOS_POR_HOJA;
 
             return (
-              <>
-                <section
-                  className="informe-hoja-pagina informe-hoja-fotografias"
-                  key={`${informeActual.id}-registro-fotografico-${indicePagina}`}
-                >
+              <Fragment
+                key={`${informeActual.id}-registro-fotografico-${indicePagina}`}
+              >
+                <section className="informe-hoja-pagina informe-hoja-fotografias">
                   <table className="informe-encabezado registro-fotografico-encabezado">
                     <tbody>
                       <tr>
@@ -3410,7 +3665,7 @@ function Informes() {
                     </section>
                   </section>
                 )}
-              </>
+              </Fragment>
             );
           })}
         </div>
@@ -3692,6 +3947,46 @@ function Informes() {
           </table>
         )}
       </div>
+
+      {/* 🔧 OPCIÓN 3: overlay mientras se generan PDFs en lote. */}
+      {generandoPdfLote.activo && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.55)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <div
+            style={{
+              background: "#ffffff",
+              color: "#2648af",
+              padding: "30px 50px",
+              borderRadius: "12px",
+              boxShadow: "0 10px 40px rgba(0,0,0,0.3)",
+              textAlign: "center",
+              fontSize: "16px",
+              fontWeight: "600",
+            }}
+          >
+            <div
+              style={{ fontSize: "14px", color: "#666", marginBottom: "8px" }}
+            >
+              Generando PDF
+            </div>
+            <div style={{ fontSize: "22px", marginBottom: "6px" }}>
+              {generandoPdfLote.actual + 1} / {generandoPdfLote.total}
+            </div>
+            <div style={{ fontSize: "12px", color: "#999" }}>
+              Por favor no cierres esta pestaña
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
