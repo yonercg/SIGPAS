@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useActividades } from "../context/ActividadesContext";
 import { cuadrillas as cuadrillasData } from "../data/cuadrillas";
+import { supabase } from "../lib/supabase";
 import "./Actividades.css";
 
 function Actividades() {
@@ -56,11 +57,20 @@ function Actividades() {
   const [posicionDocumentos, setPosicionDocumentos] = useState(null);
 
   // =========================================
+  // INFORMES CREADOS (para los chulitos ✓)
+  // 🔹 Ahora se leen desde Supabase, no desde localStorage.
+  //    Contiene objetos { id, actividadId } de la tabla "informes".
+  // =========================================
+
+  const [informesCreados, setInformesCreados] = useState([]);
+
+  // =========================================
   // FECHA BASE
   // =========================================
 
   const SEMANA_BASE = 34;
   const ANIO_BASE = 2026;
+
   // =========================================
   // CUADRILLAS QUE PARTICIPAN EN LA
   // ROTACIÓN DE DISPONIBILIDAD
@@ -68,12 +78,6 @@ function Actividades() {
   // =========================================
 
   const CUADRILLAS_ROTACION = ["C1", "C2", "C3", "C4"];
-
-  // =========================================
-  // CLAVE INFORME (misma que Informes.jsx)
-  // =========================================
-
-  const CLAVE_INFORMES = "sigpas_informes";
 
   // =========================================
   // AGREGAR DÍAS
@@ -336,6 +340,52 @@ function Actividades() {
 
     return cuadrillaActual;
   };
+
+  // =========================================
+  // CARGAR INFORMES DESDE SUPABASE
+  // 🔹 Necesario para los chulitos ✓ de la tabla.
+  //    Se refresca al volver a la pestaña (focus).
+  // =========================================
+
+  useEffect(() => {
+    let activo = true;
+
+    const cargarInformes = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("informes")
+          .select("id, metadatos");
+
+        if (!activo) return;
+
+        if (error) {
+          console.error("Error cargando informes para el check:", error);
+          setInformesCreados([]);
+          return;
+        }
+
+        setInformesCreados(
+          (data || []).map((fila) => ({
+            id: fila.id,
+            actividadId: fila.metadatos?.actividadId ?? null,
+          })),
+        );
+      } catch (err) {
+        console.error("Error inesperado cargando informes:", err);
+        if (activo) setInformesCreados([]);
+      }
+    };
+
+    cargarInformes();
+
+    const refrescar = () => cargarInformes();
+    window.addEventListener("focus", refrescar);
+
+    return () => {
+      activo = false;
+      window.removeEventListener("focus", refrescar);
+    };
+  }, []);
 
   // =========================================
   // ACTUALIZAR DISPONIBILIDAD
@@ -869,10 +919,8 @@ function Actividades() {
   // =========================================
   // DETECCIÓN DE DOCUMENTOS CREADOS
   //
-  // INFORME: se busca en localStorage con la
-  // misma clave que usa Informes.jsx
-  // (sigpas_informes) y se compara por
-  // actividadId.
+  // INFORME: se consulta la lista traída de
+  // Supabase (tabla informes) por actividadId.
   //
   // OT: se consulta con obtenerOTPorActividad
   // del context de Actividades (misma función
@@ -884,27 +932,11 @@ function Actividades() {
       return false;
     }
 
-    try {
-      const guardado = localStorage.getItem(CLAVE_INFORMES);
-
-      if (!guardado) {
-        return false;
-      }
-
-      const informesGuardados = JSON.parse(guardado);
-
-      if (!Array.isArray(informesGuardados)) {
-        return false;
-      }
-
-      return informesGuardados.some(
-        (informe) => String(informe?.actividadId ?? "") === String(actividadId),
-      );
-    } catch (error) {
-      console.error("Error al verificar informe:", error);
-
-      return false;
-    }
+    // 🔹 FIX: consultamos la lista de informes traída de Supabase
+    // en lugar de leer localStorage (que ya no se usa).
+    return informesCreados.some(
+      (informe) => String(informe.actividadId ?? "") === String(actividadId),
+    );
   };
 
   const tieneOrdenTrabajoCreada = (actividadId) => {
@@ -979,6 +1011,8 @@ function Actividades() {
 
   const disponibilidad = obtenerInformacionDisponibilidad();
 
+  // ⚠️ FIN DE LA PARTE 1
+  // La PARTE 2 (JSX return) va justo debajo, dentro de este mismo componente.
   // =========================================
   // INTERFAZ
   // =========================================

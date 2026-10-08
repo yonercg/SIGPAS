@@ -699,7 +699,7 @@
 
 .informe-hoja-continuacion p {
   margin: 12px 0 0;
-  font-size: 9px;
+  /* 🔹 Sin font-size: hereda el 15px de .descripcion-editor */
   line-height: 1.4;
 }
 
@@ -1069,7 +1069,7 @@
 
   vertical-align: middle;
 
-  text-align: left;
+  text-align: center;
 }
 
 .encabezado-titulo-derecho {
@@ -1134,7 +1134,7 @@
 
   line-height: 1.15;
 
-  text-align: left;
+  text-align: center;
 
   vertical-align: middle;
 }
@@ -1483,8 +1483,9 @@
 }
 
 .informe-hoja-final {
-  display: flex;
-  flex-direction: column;
+  /* 🔹 display: block (no flex) para que los bloques crezcan
+     naturalmente y no se encojan entre sí. */
+  display: block;
   font-family: Arial, Helvetica, sans-serif;
 }
 
@@ -1511,25 +1512,19 @@
   border: 0;
   outline: 0;
   padding: 6px;
-  resize: vertical;
-  font:
-    8px/1.25 Arial,
-    Helvetica,
-    sans-serif;
+  /* 🔹 FIX — sin scroll interno; se expande con el contenido */
+  overflow: hidden;
+  resize: none;
+  font-family: "Times New Roman", Times, serif;
+  font-size: 15px;
+  line-height: 1.35;
   overflow-wrap: break-word;
 }
 
-.informe-hoja-final > .bloque-final-informe:last-child {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-height: 0;
-}
-
-.informe-hoja-final > .bloque-final-informe:last-child > textarea {
-  flex: 1;
-  min-height: 0;
-  resize: none;
+/* 🔹 Eliminado el flex: 1 — con auto-paginación cada bloque
+   crece según su contenido, sin encogerse. */
+.informe-hoja-final > .bloque-final-informe {
+  margin-bottom: 8px;
 }
 
 .bloque-tiempos table {
@@ -2692,4 +2687,190 @@
   .informe-hoja-pagina {
     background: #ffffff !important;
   }
+}
+/* ============================================================ */
+/* 🔹 PARCHE TIPOGRÁFICO — Times New Roman                    */
+/* Aplicado al final para sobrescribir las reglas originales. */
+/* ============================================================ */
+
+/* Familia global dentro de las hojas del informe */
+.informe-hoja,
+.informe-hoja-pagina,
+.informe-hoja *,
+.informe-hoja-pagina *,
+.informe-encabezado,
+.informe-primera-seccion,
+.descripcion-editor,
+.reporte-anomalias,
+.reporte-anomalias-tabla,
+.registro-fotografico,
+.fotos-antiguas-compatibilidad,
+.informe-contenido-pagina,
+.informe-hoja-final,
+.bloque-final-informe,
+.bloque-tiempos,
+.informe-hoja-continuacion {
+  font-family: "Times New Roman", Times, serif !important;
+}
+
+/* --- Encabezado oficial (CÓDIGO, VERSIÓN, FECHA, PÁGINA) --- */
+.encabezado-label,
+.encabezado-valor,
+.encabezado-pagina {
+  font-size: 10px !important;
+  height: 22px !important;
+}
+
+.encabezado-titulo-izquierdo,
+.encabezado-titulo-derecho {
+  font-size: 10px !important;
+  line-height: 1.15 !important;
+}
+
+/* --- Primera sección (contrato, subestación, personal) --- */
+.celda-contrato,
+.celda-electrificadora {
+  font-size: 12px !important;
+  line-height: 1.15 !important;
+  min-height: 34px !important;
+}
+
+.celda-label,
+.celda-label-doble {
+  font-size: 11px !important;
+  line-height: 1.15 !important;
+  min-height: 34px !important;
+}
+
+.celda-input input,
+.celda-input input[type="date"] {
+  font-size: 12px !important;
+  min-height: 34px !important;
+}
+
+.celda-personal-titulo,
+.celda-cedula-titulo {
+  font-size: 11px !important;
+}
+
+.personal-linea {
+  height: 22px !important;
+  font-size: 11px !important;
+}
+
+.personal-linea input {
+  height: 21px !important;
+  font-size: 11px !important;
+}
+
+.firma-nombre-titulo {
+  font-size: 10px !important;
+}
+
+.bloque-firma-nombre {
+  min-height: 44px !important;
+}
+
+.bloque-firma-nombre input {
+  height: 21px !important;
+  font-size: 11px !important;
+}
+
+.espacio-firma {
+  font-size: 10px !important;
+}
+
+/* --- Descripción de actividad (cuerpo principal) --- */
+.descripcion-titulo {
+  font-size: 12px !important;
+}
+
+.descripcion-editor {
+  font-size: 15px !important;
+  line-height: 1.4 !important;
+}
+
+/* --- Reporte de anomalías --- */
+.reporte-anomalias-titulo {
+  font-size: 13px !important;
+}
+
+.reporte-anomalias-tabla th {
+  font-size: 10px !important;
+}
+
+.reporte-anomalias-tabla textarea {
+  font-size: 11px !important;
+  line-height: 1.25 !important;
+}
+
+/* --- Registro fotográfico --- */
+.registro-fotografico-titulo {
+  font-size: 13px !important;
+}
+
+.registro-fotografico-celda textarea {
+  font-size: 11px !important;
+  line-height: 1.25 !important;
+}
+
+/* --- Bloques finales (COMENTARIOS, ANEXOS, EQUIPOS) --- */
+.bloque-final-informe > div {
+  font-size: 12px !important;
+}
+
+.bloque-final-informe > textarea {
+  font-family: "Times New Roman", Times, serif !important;
+  font-size: 15px !important;
+  line-height: 1.35 !important;
+  min-height: 95px !important;
+}
+
+/* --- Tiempos de actividad --- */
+.bloque-tiempos th {
+  font-size: 10px !important;
+  line-height: 1.2 !important;
+}
+
+.bloque-tiempos td {
+  height: 68px !important;
+}
+
+.bloque-tiempos td textarea {
+  font-family: "Times New Roman", Times, serif !important;
+  font-size: 12px !important;
+  line-height: 1.3 !important;
+  min-height: 68px !important;
+}
+
+/* --- Texto libre en páginas adicionales --- */
+.informe-contenido-pagina-texto {
+  font-size: 15px !important;
+  line-height: 1.4 !important;
+}
+
+/* --- Compatibilidad con fotos antiguas --- */
+.fotos-antiguas-titulo {
+  font-size: 12px !important;
+}
+/* 🔹 FIX — Unifica el tamaño del cuerpo en TODAS las páginas del informe */
+.informe-hoja .descripcion-editor,
+.informe-hoja-pagina .descripcion-editor,
+.informe-hoja .descripcion-editor p,
+.informe-hoja-pagina .descripcion-editor p,
+.informe-hoja .descripcion-editor div,
+.informe-hoja-pagina .descripcion-editor div,
+.informe-hoja .descripcion-editor li,
+.informe-hoja-pagina .descripcion-editor li {
+  font-size: 15px !important;
+  line-height: 1.4 !important;
+  font-family: "Times New Roman", Times, serif !important;
+}
+
+.bloque-final-continuacion {
+  font-weight: 400;
+  font-size: 11px;
+  opacity: 0.7;
+  margin-left: 6px;
+  font-style: italic;
 }

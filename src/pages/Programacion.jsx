@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { cuadrillas } from "../data/cuadrillas";
 import { camionetas } from "../data/camionetas";
 import { useActividades } from "../context/ActividadesContext";
+import { supabase } from "../lib/supabase";
 import "./Programacion.css";
 
 // =========================================
@@ -15,10 +16,12 @@ const SEMANA_BASE = 34;
 const ANIO_BASE = 2026;
 
 // =========================================
-// CLAVE PLAN DE MANTENIMIENTO
+// PLAN DE MANTENIMIENTO
+// Los planes PM ahora viven en Supabase
+// (tabla "pm", fila id = "plan").
+// La clave localStorage "sigpas_plan_mantenimiento"
+// quedó OBSOLETA y ya NO se usa.
 // =========================================
-
-const CLAVE_PM = "sigpas_plan_mantenimiento";
 
 // =========================================
 // TIPOS DE ACTIVIDAD
@@ -240,6 +243,52 @@ function Programacion() {
       return {};
     }
   });
+
+  // =========================================
+  // PLANES PM DESDE SUPABASE
+  // (Reemplaza la lectura obsoleta de
+  //  localStorage "sigpas_plan_mantenimiento")
+  // =========================================
+
+  const [planesPM, setPlanesPM] = useState([]);
+
+  const [cargandoPM, setCargandoPM] = useState(true);
+
+  useEffect(() => {
+    let activo = true;
+
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("pm")
+          .select("datos")
+          .eq("id", "plan")
+          .maybeSingle();
+
+        if (!activo) return;
+
+        if (error) {
+          console.error("Error cargando PM desde Supabase:", error);
+          setPlanesPM([]);
+          return;
+        }
+
+        const datos = Array.isArray(data?.datos) ? data.datos : [];
+
+        setPlanesPM(datos);
+      } catch (err) {
+        console.error("Error inesperado cargando PM:", err);
+
+        setPlanesPM([]);
+      } finally {
+        if (activo) setCargandoPM(false);
+      }
+    })();
+
+    return () => {
+      activo = false;
+    };
+  }, []);
 
   // =========================================
   // NUEVA / MODIFICAR ACTIVIDAD
@@ -580,6 +629,7 @@ function Programacion() {
     return cuadrillaActual;
   };
 
+  // ⚠️ FIN DE LA PARTE 1 — continúa con la PARTE 2 justo debajo de esta línea.
   // =========================================
   // CUADRILLA ACTUAL
   // =========================================
@@ -705,33 +755,20 @@ function Programacion() {
 
   // =========================================
   // LEER PLAN DE MANTENIMIENTO
+  // Ahora desde el estado planesPM (Supabase).
   // =========================================
 
-  const obtenerPlanesPM = () => {
-    try {
-      const planesGuardados = localStorage.getItem(CLAVE_PM);
-
-      if (!planesGuardados) {
-        return [];
-      }
-
-      const planes = JSON.parse(planesGuardados);
-
-      return Array.isArray(planes) ? planes : [];
-    } catch (error) {
-      console.error("Error al leer el Plan de Mantenimiento:", error);
-
-      return [];
-    }
-  };
+  const obtenerPlanesPM = () => planesPM;
 
   // =========================================
   // NORMALIZAR ID PM
+  // (defensivo: tolera null/undefined)
   // =========================================
 
-  const normalizarPMId = (valor) => {
-    return valor.trim().toUpperCase();
-  };
+  const normalizarPMId = (valor) =>
+    String(valor || "")
+      .trim()
+      .toUpperCase();
 
   // =========================================
   // BUSCAR PM POR ID
@@ -1277,6 +1314,12 @@ function Programacion() {
   const guardarNuevaActividad = (event) => {
     event.preventDefault();
 
+    if (cargandoPM) {
+      alert("Espere, aún se está cargando el Plan de Mantenimiento.");
+
+      return;
+    }
+
     if (
       !nuevaActividad.fecha ||
       !nuevaActividad.nombre.trim() ||
@@ -1563,10 +1606,11 @@ function Programacion() {
 
     const tienePM = Boolean(actividad.pmId && actividad.pmId.trim());
 
+    // Usa esFueraDePM para clasificar aunque haya pmId heredado.
     const coincidePM =
       filtroPM === "Todos" ||
-      (filtroPM === "PM" && tienePM) ||
-      (filtroPM === "Fuera de PM" && !tienePM);
+      (filtroPM === "PM" && tienePM && !esFueraDePM) ||
+      (filtroPM === "Fuera de PM" && (!tienePM || esFueraDePM));
 
     const mantenimientoActividad = actividad.mantenimiento || "";
 
@@ -1921,10 +1965,14 @@ function Programacion() {
                   type="text"
                   value={nuevaActividad.pmId}
                   onChange={cambiarIdPM}
-                  placeholder="Ejemplo: PM-2026-000125"
-                  disabled={modoEdicion && Boolean(nuevaActividad.pmId)}
+                  placeholder={
+                    cargandoPM ? "Cargando PM..." : "Ejemplo: PM-2026-000125"
+                  }
+                  disabled={
+                    (modoEdicion && Boolean(nuevaActividad.pmId)) || cargandoPM
+                  }
                   style={
-                    modoEdicion && nuevaActividad.pmId
+                    (modoEdicion && nuevaActividad.pmId) || cargandoPM
                       ? {
                           backgroundColor: "#f3f4f6",
                           cursor: "not-allowed",
@@ -1933,7 +1981,18 @@ function Programacion() {
                   }
                 />
 
-                {!nuevaActividad.pmId && (
+                {cargandoPM && (
+                  <small
+                    style={{
+                      color: "#667085",
+                      fontWeight: "600",
+                    }}
+                  >
+                    Cargando Plan de Mantenimiento...
+                  </small>
+                )}
+
+                {!cargandoPM && !nuevaActividad.pmId && (
                   <small>
                     Opcional. Ingrese el ID del Plan de Mantenimiento para
                     vincular esta actividad.

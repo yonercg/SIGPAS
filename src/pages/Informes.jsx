@@ -19,6 +19,57 @@ const ESPACIOS_FOTOGRAFICOS_POR_HOJA = 4;
 
 const STORAGE_BUCKET = "sigpas-documentos";
 
+// ============================================================
+// 🔹 BLOQUES DE LA PÁGINA FINAL + AUTO-PAGINACIÓN
+//    Cada textarea se divide en chunks de N líneas. Cada chunk
+//    se renderiza en su propia hoja con encabezado repetido.
+// ============================================================
+
+const LINEAS_POR_CHUNK_FINAL = 20;
+
+const BLOQUES_FINALES_INFO = [
+  {
+    id: "comentarios",
+    titulo: "COMENTARIOS U OBSERVACIONES",
+    campo: "comentariosObservaciones",
+    tipo: "textarea",
+  },
+  {
+    id: "anexos",
+    titulo: "ANEXOS",
+    campo: "anexos",
+    tipo: "textarea",
+  },
+  {
+    id: "tiempos",
+    titulo: "TIEMPOS DE ACTIVIDAD",
+    tipo: "tiempos",
+  },
+  {
+    id: "equipos",
+    titulo: "EQUIPOS Y RECURSOS",
+    campo: "equiposRecursos",
+    tipo: "textarea",
+  },
+];
+
+// Divide un texto en chunks de máximo N líneas (por \n).
+function dividirTextoEnChunks(texto, lineasPorChunk = LINEAS_POR_CHUNK_FINAL) {
+  if (!texto) return [""];
+
+  const lineas = String(texto).split("\n");
+
+  if (lineas.length <= lineasPorChunk) {
+    return [texto];
+  }
+
+  const chunks = [];
+  for (let i = 0; i < lineas.length; i += lineasPorChunk) {
+    chunks.push(lineas.slice(i, i + lineasPorChunk).join("\n"));
+  }
+  return chunks;
+}
+
 const MESES = [
   "Todos",
   "Enero",
@@ -265,7 +316,87 @@ function dividirEnBloques(items, tamano) {
 }
 
 /* ============================================================
-   PERSISTENCIA EN SUPABASE (tabla + storage)
+   UTILIDADES DE NOMBRE Y DESCARGA DE PDF
+   ============================================================ */
+
+function sanitizarNombreArchivo(valor) {
+  return String(valor || "")
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\w\-]+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function formatearFechaParaArchivo(fecha) {
+  if (!fecha) return "";
+
+  let d;
+
+  if (typeof fecha === "string" && /^\d{4}-\d{2}-\d{2}/.test(fecha)) {
+    const [a, m, dia] = fecha.substring(0, 10).split("-").map(Number);
+    d = new Date(a, m - 1, dia);
+  } else {
+    d = new Date(fecha);
+  }
+
+  if (isNaN(d.getTime())) return "";
+
+  const anio = d.getFullYear();
+  const mes = String(d.getMonth() + 1).padStart(2, "0");
+  const dia = String(d.getDate()).padStart(2, "0");
+
+  return `${anio}-${mes}-${dia}`;
+}
+
+function construirNombrePdf(informe) {
+  const numero = sanitizarNombreArchivo(
+    informe?.numeroInforme || informe?.id || "SIN-NUMERO",
+  );
+
+  const subestacion = sanitizarNombreArchivo(
+    informe?.subestacion ||
+      informe?.actividadSnapshot?.subestacion ||
+      "SIN-SUBESTACION",
+  );
+
+  const fechaRaw =
+    informe?.actividadSnapshot?.fecha ||
+    informe?.fechaInicio ||
+    informe?.fechaCreacion ||
+    "";
+
+  const fecha = formatearFechaParaArchivo(fechaRaw) || "SIN-FECHA";
+
+  return `${numero}_${subestacion}_${fecha}.pdf`;
+}
+
+async function descargarPdfDesdeUrl(url, nombreArchivo) {
+  const response = await fetch(url, { cache: "no-store" });
+
+  if (!response.ok) {
+    throw new Error(
+      `No se pudo descargar el PDF: ${response.status} ${response.statusText}`,
+    );
+  }
+
+  const blob = await response.blob();
+  const blobUrl = URL.createObjectURL(blob);
+
+  const enlace = document.createElement("a");
+  enlace.href = blobUrl;
+  enlace.download = nombreArchivo;
+  enlace.style.display = "none";
+  document.body.appendChild(enlace);
+  enlace.click();
+  document.body.removeChild(enlace);
+
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+}
+
+/* ============================================================
+   PERSISTENCIA EN SUPABASE
    ============================================================ */
 
 async function cargarInformesDesdeSupabase() {
@@ -333,35 +464,19 @@ async function subirPdfAStorage(informeId, pdfBlob) {
 async function descargarJsonDeStorage(informeId) {
   const path = `informes/${informeId}/datos.json`;
 
-  const descarga = (async () => {
-    const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(path);
+  const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(path);
 
-    // 🔧 FIX: agregamos un query param único (?t=timestamp) para evitar
-    // que la caché del navegador o de la CDN sirva la versión vieja del
-    // JSON después de guardar modificaciones.
-    const url = `${data.publicUrl}?t=${Date.now()}`;
+  const url = `${data.publicUrl}?t=${Date.now()}`;
 
-    const response = await fetch(url, {
-      cache: "no-store",
-    });
+  const response = await fetch(url, { cache: "no-store" });
 
-    if (!response.ok) {
-      throw new Error(
-        `Error descargando JSON: ${response.status} ${response.statusText}`,
-      );
-    }
+  if (!response.ok) {
+    throw new Error(
+      `Error descargando JSON: ${response.status} ${response.statusText}`,
+    );
+  }
 
-    return response.json();
-  })();
-
-  const timeout = new Promise((_, reject) =>
-    setTimeout(
-      () => reject(new Error("Timeout descargando informe (0.5s)")),
-      500,
-    ),
-  );
-
-  return Promise.race([descarga, timeout]);
+  return response.json();
 }
 
 function obtenerUrlPublica(path) {
@@ -428,21 +543,38 @@ async function eliminarInformeEnSupabase(id) {
 }
 
 /* ============================================================
-   GENERAR PDF COMO BLOB (reutilizable)
+   GENERAR PDF COMO BLOB
    ============================================================ */
 
 async function generarPdfBlob(contenedor) {
   await document.fonts?.ready;
 
   const imagenes = Array.from(contenedor.querySelectorAll("img"));
+
   await Promise.all(
-    imagenes.map((imagen) =>
-      imagen.complete
-        ? Promise.resolve()
-        : new Promise((resolver) => {
-            imagen.addEventListener("load", resolver, { once: true });
-            imagen.addEventListener("error", resolver, { once: true });
-          }),
+    imagenes.map(
+      (img) =>
+        new Promise((resolver) => {
+          if (img.complete && img.naturalWidth > 0) {
+            resolver();
+            return;
+          }
+
+          const finalizar = () => {
+            img.removeEventListener("load", finalizar);
+            img.removeEventListener("error", finalizar);
+            resolver();
+          };
+
+          img.addEventListener("load", finalizar, { once: true });
+          img.addEventListener("error", finalizar, { once: true });
+
+          if (img.src && !img.complete) {
+            const srcOriginal = img.src;
+            img.src = "";
+            img.src = srcOriginal;
+          }
+        }),
     ),
   );
 
@@ -467,19 +599,86 @@ async function generarPdfBlob(contenedor) {
   const altoPagina = 279.4;
 
   for (const [indice, hoja] of hojas.entries()) {
+    const editablesOriginales = Array.from(
+      hoja.querySelectorAll("[contenteditable]"),
+    );
+    const editablesHtml = editablesOriginales.map((el) => el.innerHTML || "");
+
+    const textareasOriginales = Array.from(hoja.querySelectorAll("textarea"));
+    const textareasValores = textareasOriginales.map((el) => el.value || "");
+
     const canvas = await html2canvas(hoja, {
       backgroundColor: "#ffffff",
       scale: 2,
-      useCORS: true,
+      useCORS: false,
+      allowTaint: true,
       logging: false,
       onclone: (documentoClonado) => {
-        documentoClonado
-          .querySelectorAll(
-            ".btn-eliminar-foto, .btn-eliminar-imagen-editor, .registro-fotografico-cargar, .cargar-firma-digital",
-          )
-          .forEach((elemento) => {
-            elemento.style.display = "none";
-          });
+        try {
+          documentoClonado
+            .querySelectorAll(
+              ".btn-eliminar-foto, .btn-eliminar-imagen-editor, .registro-fotografico-cargar, .cargar-firma-digital",
+            )
+            .forEach((elemento) => {
+              elemento.style.display = "none";
+            });
+
+          documentoClonado
+            .querySelectorAll("[contenteditable]")
+            .forEach((clonEl, i) => {
+              if (editablesHtml[i] !== undefined) {
+                try {
+                  clonEl.innerHTML = editablesHtml[i];
+                } catch (err) {
+                  console.warn("No se pudo forzar contenteditable:", err);
+                }
+              }
+              clonEl.removeAttribute("contenteditable");
+            });
+
+          documentoClonado
+            .querySelectorAll("textarea")
+            .forEach((clonTextarea, i) => {
+              try {
+                const valor = textareasValores[i] ?? clonTextarea.value ?? "";
+                const estilo = window.getComputedStyle(clonTextarea);
+
+                const div = documentoClonado.createElement("div");
+                div.textContent = valor;
+
+                div.style.width = estilo.width;
+                div.style.minHeight = estilo.minHeight;
+                div.style.height = "auto";
+                div.style.boxSizing = "border-box";
+                div.style.padding = estilo.padding;
+                div.style.margin = estilo.margin;
+                div.style.border = estilo.border;
+                div.style.borderRadius = estilo.borderRadius;
+                div.style.background = estilo.background;
+                div.style.color = estilo.color;
+                div.style.fontFamily = estilo.fontFamily;
+                div.style.fontSize = estilo.fontSize;
+                div.style.fontWeight = estilo.fontWeight;
+                div.style.fontStyle = estilo.fontStyle;
+                div.style.lineHeight = estilo.lineHeight;
+                div.style.textAlign = estilo.textAlign;
+                div.style.verticalAlign = estilo.verticalAlign;
+
+                div.style.whiteSpace = "pre-wrap";
+                div.style.wordWrap = "break-word";
+                div.style.overflowWrap = "break-word";
+                div.style.overflow = "hidden";
+
+                div.className = clonTextarea.className;
+
+                clonTextarea.replaceWith(div);
+              } catch (err) {
+                console.warn("No se pudo clonar textarea para el PDF:", err);
+              }
+            });
+        } catch (err) {
+          console.error("Error dentro de onclone (continuando):", err);
+        }
       },
     });
 
@@ -816,11 +1015,6 @@ function crearInformeInicial(actividad = null) {
       : null,
   };
 }
-
-/* ============================================================
-   ⬇️ PARTE 2 EMPIEZA AQUÍ ⬇️
-   Pega INMEDIATAMENTE debajo de esta línea la PARTE 2
-   ============================================================ */
 /* ============================================================
    COMPONENTE
    ============================================================ */
@@ -859,16 +1053,20 @@ function Informes() {
 
   const [filtroCuadrilla, setFiltroCuadrilla] = useState("Todas");
 
-  // ✅ CORRECCIÓN: esta línea faltaba y causaba el error
-  // "informesSeleccionados is not defined".
   const [informesSeleccionados, setInformesSeleccionados] = useState([]);
 
-  // 🔧 OPCIÓN 3: cola de informes sin PDF para generar en el momento.
   const [colaPdfGeneracion, setColaPdfGeneracion] = useState([]);
   const [generandoPdfLote, setGenerandoPdfLote] = useState({
     activo: false,
     total: 0,
     actual: 0,
+  });
+
+  // 🔹 Indicador de descarga de PDFs ya existentes (como en OTs).
+  const [descargandoPdf, setDescargandoPdf] = useState(false);
+  const [progresoDescargaPdf, setProgresoDescargaPdf] = useState({
+    actual: 0,
+    total: 0,
   });
 
   const editorDescripcionRef = useRef(null);
@@ -888,15 +1086,10 @@ function Informes() {
 
   const ultimoCambioProgramaticoRef = useRef(0);
 
-  // 🔧 FIX: guarda el último HTML procesado. Si el HTML no cambió,
-  // no procesamos ni actualizamos estado (corta el loop sin bloquear
-  // los inputs reales del usuario).
   const ultimoHtmlProcesadoRef = useRef("");
 
   const timeoutCargandoRef = useRef(null);
 
-  // 🔧 FIX: evita crear múltiples informes para la misma actividad
-  // cuando setSearchParams tarda en actualizar la URL.
   const actividadCreadaRef = useRef(null);
 
   const [paginasDescripcion, setPaginasDescripcion] = useState([""]);
@@ -939,10 +1132,9 @@ function Informes() {
   }, []);
 
   /* ============================================================
-     🔧 OPCIÓN 3: procesar la cola de PDFs que hay que generar.
+     OPCIÓN 3: procesar la cola de PDFs que hay que generar.
      ============================================================ */
 
-  // Paso A: cuando hay un id en la cola, abrir ese informe.
   useEffect(() => {
     if (!generandoPdfLote.activo) return;
     if (colaPdfGeneracion.length === 0) return;
@@ -964,8 +1156,6 @@ function Informes() {
     informeActual?.__contenidoCargado,
   ]);
 
-  // Paso B: cuando el informe está renderizado, generar el PDF, subirlo,
-  // descargarlo y pasar al siguiente.
   useEffect(() => {
     if (!generandoPdfLote.activo) return;
     if (colaPdfGeneracion.length === 0) return;
@@ -994,22 +1184,9 @@ function Informes() {
         const path = `informes/${informeActual.id}/informe.pdf`;
         const url = obtenerUrlPublica(path);
 
-        const nombre = (
-          informeActual.numeroInforme ||
-          informeActual.id ||
-          "informe"
-        )
-          .replace(/[^\w-]+/g, "-")
-          .replace(/^-+|-+$/g, "");
+        const nombre = construirNombrePdf(informeActual);
 
-        const enlace = document.createElement("a");
-        enlace.href = url;
-        enlace.download = `${nombre || "informe"}.pdf`;
-        enlace.target = "_blank";
-        enlace.rel = "noopener noreferrer";
-        document.body.appendChild(enlace);
-        enlace.click();
-        document.body.removeChild(enlace);
+        await descargarPdfDesdeUrl(url, nombre);
       } catch (error) {
         console.error("Error generando PDF en lote:", error);
       } finally {
@@ -1036,7 +1213,6 @@ function Informes() {
     informeActual?.__contenidoCargado,
   ]);
 
-  // Paso C: cuando la cola se vacía, cerrar el modo y volver a la lista.
   useEffect(() => {
     if (!generandoPdfLote.activo) return;
     if (colaPdfGeneracion.length > 0) return;
@@ -1051,7 +1227,6 @@ function Informes() {
 
   /* ============================================================
      TIMEOUT DE SEGURIDAD PARA "ABRIENDO..."
-     (un solo useEffect, no dos como antes)
      ============================================================ */
 
   useEffect(() => {
@@ -1247,10 +1422,6 @@ function Informes() {
             return;
           }
 
-          // 🔧 FIX: si ya creamos un informe para esta actividad en esta
-          // sesión, no crear otro. Esto evita el duplicado cuando el
-          // useEffect se dispara varias veces por el timing de
-          // setSearchParams.
           if (actividadCreadaRef.current === actividadId) {
             return;
           }
@@ -1318,7 +1489,6 @@ function Informes() {
       );
     }
 
-    // 🔧 FIX: guardamos el HTML inicial del informe cargado.
     ultimoHtmlProcesadoRef.current = contenido;
 
     window.requestAnimationFrame(() => {
@@ -1365,6 +1535,88 @@ function Informes() {
       }
     });
   }, [paginasDescripcion]);
+
+  /* ============================================================
+     AUTO-PAGINACIÓN DE LA HOJA FINAL (por chunks de líneas)
+     ============================================================
+     Cada textarea final (COMENTARIOS, ANEXOS, EQUIPOS) se divide
+     en sub-bloques de LINEAS_POR_CHUNK_FINAL líneas. Luego se
+     empaquetan por altura estimada en páginas de hoja Carta.
+     Así, si un textarea es muy largo, se reparte en varias
+     páginas con encabezado repetido.
+     ============================================================ */
+
+  const paginasBloquesFinales = useMemo(() => {
+    if (!informeActual) return [[]];
+
+    // 1) Aplanar todo en sub-bloques.
+    const subBloques = [];
+
+    BLOQUES_FINALES_INFO.forEach((bloque) => {
+      if (bloque.tipo === "textarea") {
+        const valor = informeActual[bloque.campo] || "";
+        const chunks = dividirTextoEnChunks(valor);
+
+        chunks.forEach((chunk, idx) => {
+          subBloques.push({
+            tipo: "texto",
+            id: `${bloque.id}-${idx}`,
+            blockId: bloque.id,
+            titulo: bloque.titulo,
+            campo: bloque.campo,
+            chunk,
+            chunkIndex: idx,
+            chunksTotal: chunks.length,
+            todasChunks: chunks,
+            numLineas: Math.max(1, chunk.split("\n").length),
+          });
+        });
+      } else if (bloque.tipo === "tiempos") {
+        subBloques.push({
+          tipo: "tiempos",
+          id: bloque.id,
+          blockId: bloque.id,
+          titulo: bloque.titulo,
+        });
+      }
+    });
+
+    // 2) Empaquetar sub-bloques en páginas por altura estimada.
+    const ALTO_DISPONIBLE = 700;
+
+    const calcularAlto = (sub) => {
+      if (sub.tipo === "texto") {
+        return 30 + Math.max(3, sub.numLineas) * 24 + 20;
+      }
+      if (sub.tipo === "tiempos") {
+        return 200;
+      }
+      return 100;
+    };
+
+    const paginas = [];
+    let pagina = [];
+    let altura = 0;
+
+    subBloques.forEach((sub) => {
+      const h = calcularAlto(sub);
+
+      if (altura + h > ALTO_DISPONIBLE && pagina.length > 0) {
+        paginas.push(pagina);
+        pagina = [];
+        altura = 0;
+      }
+
+      pagina.push(sub);
+      altura += h;
+    });
+
+    if (pagina.length > 0) {
+      paginas.push(pagina);
+    }
+
+    return paginas.length > 0 ? paginas : [[]];
+  }, [informeActual]);
 
   /* ============================================================
      FILTRAR INFORMES
@@ -1612,6 +1864,12 @@ function Informes() {
   }
 
   function ajustarAlturaAnomalia(event) {
+    const campo = event.currentTarget;
+    campo.style.height = "auto";
+    campo.style.height = `${campo.scrollHeight}px`;
+  }
+
+  function ajustarAlturaTextarea(event) {
     const campo = event.currentTarget;
     campo.style.height = "auto";
     campo.style.height = `${campo.scrollHeight}px`;
@@ -1866,8 +2124,6 @@ function Informes() {
     const htmlConMarcador = obtenerHtmlDePaginas();
     const html = quitarMarcadoresDeCursor(htmlConMarcador);
 
-    // 🔧 FIX: si el HTML no cambió, no procesamos. Esto corta el loop
-    // sin bloquear los inputs reales del usuario.
     if (html === ultimoHtmlProcesadoRef.current) {
       if (tieneMarcador) {
         window.requestAnimationFrame(() => restaurarCursorDesdeMarcador());
@@ -2394,7 +2650,7 @@ function Informes() {
   }
 
   /* ============================================================
-     GUARDAR INFORME (solo JSON + metadatos, rápido, sin freeze)
+     GUARDAR INFORME
      ============================================================ */
 
   async function guardarInforme() {
@@ -2488,7 +2744,7 @@ function Informes() {
   }
 
   /* ============================================================
-     GENERAR PDF (botón aparte, puede tardar unos segundos)
+     GENERAR PDF
      ============================================================ */
 
   async function generarYSubirPdf() {
@@ -2574,6 +2830,8 @@ function Informes() {
      ============================================================ */
 
   async function descargarInformesSeleccionados() {
+    if (descargandoPdf) return;
+
     const seleccionados = informes.filter((informe) =>
       informesSeleccionados.includes(informe.id),
     );
@@ -2582,47 +2840,67 @@ function Informes() {
       return;
     }
 
-    const conPdf = [];
-    const sinPdf = [];
+    setDescargandoPdf(true);
+    setProgresoDescargaPdf({ actual: 0, total: seleccionados.length });
 
-    for (const informe of seleccionados) {
-      const existe = await existePdfEnStorage(informe.id);
-      if (existe) {
-        conPdf.push(informe);
-      } else {
-        sinPdf.push(informe);
+    try {
+      const conPdf = [];
+      const sinPdf = [];
+
+      for (const informe of seleccionados) {
+        const existe = await existePdfEnStorage(informe.id);
+        if (existe) {
+          conPdf.push(informe);
+        } else {
+          sinPdf.push(informe);
+        }
       }
-    }
 
-    for (const informe of conPdf) {
-      const path = `informes/${informe.id}/informe.pdf`;
-      const url = obtenerUrlPublica(path);
+      // =====================================================
+      // 1) Informes CON PDF → descarga directa (con progreso)
+      // =====================================================
+      for (let i = 0; i < conPdf.length; i++) {
+        const informe = conPdf[i];
 
-      const nombre = (informe.numeroInforme || informe.id || "informe")
-        .replace(/[^\w-]+/g, "-")
-        .replace(/^-+|-+$/g, "");
+        setProgresoDescargaPdf({
+          actual: i + 1,
+          total: seleccionados.length,
+        });
 
-      const enlace = document.createElement("a");
-      enlace.href = url;
-      enlace.download = `${nombre || "informe"}.pdf`;
-      enlace.target = "_blank";
-      enlace.rel = "noopener noreferrer";
-      document.body.appendChild(enlace);
-      enlace.click();
-      document.body.removeChild(enlace);
+        const path = `informes/${informe.id}/informe.pdf`;
+        const url = obtenerUrlPublica(path);
+        const nombre = construirNombrePdf(informe);
 
-      await new Promise((r) => window.setTimeout(r, 300));
-    }
+        try {
+          await descargarPdfDesdeUrl(url, nombre);
+        } catch (error) {
+          console.error("Error descargando PDF:", error);
+          window.alert(
+            `No se pudo descargar el PDF de "${informe.numeroInforme || informe.id}".`,
+          );
+        }
 
-    if (sinPdf.length > 0) {
-      setGenerandoPdfLote({
-        activo: true,
-        total: sinPdf.length,
-        actual: 0,
-      });
-      setColaPdfGeneracion(sinPdf.map((i) => i.id));
-    } else {
-      setInformesSeleccionados([]);
+        if (i < conPdf.length - 1) {
+          await new Promise((r) => window.setTimeout(r, 400));
+        }
+      }
+
+      // =====================================================
+      // 2) Informes SIN PDF → activar modo "generar en el momento"
+      // =====================================================
+      if (sinPdf.length > 0) {
+        setGenerandoPdfLote({
+          activo: true,
+          total: sinPdf.length,
+          actual: 0,
+        });
+        setColaPdfGeneracion(sinPdf.map((i) => i.id));
+      } else {
+        setInformesSeleccionados([]);
+      }
+    } finally {
+      setDescargandoPdf(false);
+      setProgresoDescargaPdf({ actual: 0, total: 0 });
     }
   }
 
@@ -2649,8 +2927,6 @@ function Informes() {
     ultimoInformeEditorRef.current = null;
     imagenSeleccionadaRef.current = null;
     setImagenSeleccionada(false);
-    // 🔧 FIX: resetear la guardia para que la próxima vez que se entre
-    // desde una actividad se pueda crear un informe nuevo.
     actividadCreadaRef.current = null;
     setSearchParams({});
   }
@@ -2707,7 +2983,7 @@ function Informes() {
         (informeActual.registroFotografico?.length ||
           ESPACIOS_FOTOGRAFICOS_POR_HOJA) / ESPACIOS_FOTOGRAFICOS_POR_HOJA,
       ) +
-      1;
+      paginasBloquesFinales.length;
     const registroFotografico = informeActual.registroFotografico?.length
       ? informeActual.registroFotografico
       : crearEspaciosFotograficosIniciales();
@@ -2715,6 +2991,45 @@ function Informes() {
       registroFotografico,
       ESPACIOS_FOTOGRAFICOS_POR_HOJA,
     );
+
+    // 🔹 Encabezado reutilizable para todas las páginas finales.
+    const renderEncabezadoFinal = (numeroPagina) => (
+      <table className="informe-encabezado">
+        <tbody>
+          <tr>
+            <td rowSpan="4" className="encabezado-logo">
+              <img src="/logo-emsa.png" alt="EMSA" />
+            </td>
+            <td className="encabezado-label">CÓDIGO:</td>
+            <td className="encabezado-valor">EMSA-MTO-IF-01</td>
+          </tr>
+          <tr>
+            <td className="encabezado-label">VERSIÓN:</td>
+            <td className="encabezado-valor">01</td>
+          </tr>
+          <tr>
+            <td className="encabezado-label">FECHA:</td>
+            <td className="encabezado-valor">
+              {formatearFecha(informeActual.fechaCreacion)}
+            </td>
+          </tr>
+          <tr>
+            <td colSpan="2" className="encabezado-pagina">
+              PÁGINA {numeroPagina} DE {totalPaginasInforme}
+            </td>
+          </tr>
+          <tr>
+            <td className="encabezado-titulo-izquierdo">
+              INFORME REPORTE DE MANTENIMIENTO DIARIO
+            </td>
+            <td colSpan="2" className="encabezado-titulo-derecho">
+              MANTENIMIENTO DEL SISTEMA ELÉCTRICO
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    );
+
     return (
       <div className="informes-editor">
         <div className="informes-editor-barra">
@@ -2873,15 +3188,11 @@ function Informes() {
 
                 <tr>
                   <td className="encabezado-titulo-izquierdo">
-                    INFORME REPORTE DE
-                    <br />
-                    MANTENIMIENTO DIARIO
+                    INFORME REPORTE DEMANTENIMIENTO DIARIO
                   </td>
 
                   <td colSpan="2" className="encabezado-titulo-derecho">
-                    MANTENIMIENTO DEL
-                    <br />
-                    SISTEMA ELÉCTRICO
+                    MANTENIMIENTO DEL SISTEMA ELÉCTRICO
                   </td>
                 </tr>
               </tbody>
@@ -3545,126 +3856,132 @@ function Informes() {
                   </div>
                 </section>
 
-                {indicePagina === paginasFotograficas.length - 1 && (
-                  <section className="informe-hoja-pagina informe-hoja-final">
-                    <table className="informe-encabezado">
-                      <tbody>
-                        <tr>
-                          <td rowSpan="4" className="encabezado-logo">
-                            <img src="/logo-emsa.png" alt="EMSA" />
-                          </td>
-                          <td className="encabezado-label">CÓDIGO:</td>
-                          <td className="encabezado-valor">EMSA-MTO-IF-01</td>
-                        </tr>
-                        <tr>
-                          <td className="encabezado-label">VERSIÓN:</td>
-                          <td className="encabezado-valor">01</td>
-                        </tr>
-                        <tr>
-                          <td className="encabezado-label">FECHA:</td>
-                          <td className="encabezado-valor">
-                            {formatearFecha(informeActual.fechaCreacion)}
-                          </td>
-                        </tr>
-                        <tr>
-                          <td colSpan="2" className="encabezado-pagina">
-                            PÁGINA {totalPaginasInforme} DE{" "}
-                            {totalPaginasInforme}
-                          </td>
-                        </tr>
-                        <tr>
-                          <td className="encabezado-titulo-izquierdo">
-                            INFORME REPORTE DE
-                            <br />
-                            MANTENIMIENTO DIARIO
-                          </td>
-                          <td colSpan="2" className="encabezado-titulo-derecho">
-                            MANTENIMIENTO DEL
-                            <br />
-                            SISTEMA ELÉCTRICO
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
+                {indicePagina === paginasFotograficas.length - 1 &&
+                  paginasBloquesFinales.map((subBloques, idxPagina) => {
+                    const numeroPaginaFinal =
+                      paginasDescripcion.length +
+                      bloquesAnomalias.length +
+                      paginasFotograficas.length +
+                      idxPagina +
+                      1;
 
-                    {[
-                      [
-                        "COMENTARIOS U OBSERVACIONES",
-                        "comentariosObservaciones",
-                      ],
-                      ["ANEXOS", "anexos"],
-                    ].map(([titulo, campo]) => (
-                      <section className="bloque-final-informe" key={campo}>
-                        <div>{titulo}</div>
-                        <textarea
-                          value={informeActual[campo] || ""}
-                          onChange={(event) =>
-                            actualizarCampo(campo, event.target.value)
+                    return (
+                      <section
+                        className="informe-hoja-pagina informe-hoja-final"
+                        key={`${informeActual.id}-final-${idxPagina}`}
+                      >
+                        {renderEncabezadoFinal(numeroPaginaFinal)}
+
+                        {subBloques.map((sub) => {
+                          // ==========================================
+                          // CHUNK DE TEXTO (COMENTARIOS / ANEXOS / EQUIPOS)
+                          // ==========================================
+                          if (sub.tipo === "texto") {
+                            const esContinuacion = sub.chunkIndex > 0;
+
+                            return (
+                              <section
+                                className="bloque-final-informe"
+                                key={sub.id}
+                                data-bloque-final={sub.blockId}
+                              >
+                                <div>
+                                  {sub.titulo}
+                                  {esContinuacion && (
+                                    <span className="bloque-final-continuacion">
+                                      (continuación)
+                                    </span>
+                                  )}
+                                </div>
+                                <textarea
+                                  value={sub.chunk}
+                                  onChange={(event) => {
+                                    const nuevosChunks = [...sub.todasChunks];
+                                    nuevosChunks[sub.chunkIndex] =
+                                      event.target.value;
+
+                                    actualizarCampo(
+                                      sub.campo,
+                                      nuevosChunks.join("\n"),
+                                    );
+                                  }}
+                                  onInput={ajustarAlturaTextarea}
+                                  ref={(el) => {
+                                    if (el) {
+                                      el.style.height = "auto";
+                                      el.style.height = `${el.scrollHeight}px`;
+                                    }
+                                  }}
+                                ></textarea>
+                              </section>
+                            );
                           }
-                        ></textarea>
+
+                          // ==========================================
+                          // TABLA DE TIEMPOS
+                          // ==========================================
+                          if (sub.tipo === "tiempos") {
+                            return (
+                              <section
+                                className="bloque-final-informe bloque-tiempos"
+                                key={sub.id}
+                                data-bloque-final={sub.blockId}
+                              >
+                                <div>{sub.titulo}</div>
+                                <table>
+                                  <thead>
+                                    <tr>
+                                      {[
+                                        "SUBESTACIÓN",
+                                        "ACTIVIDADES",
+                                        "HORA INICIAL DESPLAZAMIENTO",
+                                        "HORA INICIAL ACTIVIDAD",
+                                        "HORA FINAL ACTIVIDAD",
+                                        "HORA FINAL DESPLAZAMIENTO",
+                                      ].map((titulo) => (
+                                        <th key={titulo}>{titulo}</th>
+                                      ))}
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {(informeActual.tiemposActividad || [{}])
+                                      .slice(0, 1)
+                                      .map((fila, indice) => (
+                                        <tr key={indice}>
+                                          {[
+                                            "subestacion",
+                                            "actividades",
+                                            "horaInicialDesplazamiento",
+                                            "horaInicialActividad",
+                                            "horaFinalActividad",
+                                            "horaFinalDesplazamiento",
+                                          ].map((campo) => (
+                                            <td key={campo}>
+                                              <textarea
+                                                value={fila[campo] || ""}
+                                                onChange={(event) =>
+                                                  actualizarCampoTiempo(
+                                                    indice,
+                                                    campo,
+                                                    event.target.value,
+                                                  )
+                                                }
+                                              ></textarea>
+                                            </td>
+                                          ))}
+                                        </tr>
+                                      ))}
+                                  </tbody>
+                                </table>
+                              </section>
+                            );
+                          }
+
+                          return null;
+                        })}
                       </section>
-                    ))}
-
-                    <section className="bloque-final-informe bloque-tiempos">
-                      <div>TIEMPOS DE ACTIVIDAD</div>
-                      <table>
-                        <thead>
-                          <tr>
-                            {[
-                              "SUBESTACIÓN",
-                              "ACTIVIDADES",
-                              "HORA INICIAL DESPLAZAMIENTO",
-                              "HORA INICIAL ACTIVIDAD",
-                              "HORA FINAL ACTIVIDAD",
-                              "HORA FINAL DESPLAZAMIENTO",
-                            ].map((titulo) => (
-                              <th key={titulo}>{titulo}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(informeActual.tiemposActividad || [{}])
-                            .slice(0, 1)
-                            .map((fila, indice) => (
-                              <tr key={indice}>
-                                {[
-                                  "subestacion",
-                                  "actividades",
-                                  "horaInicialDesplazamiento",
-                                  "horaInicialActividad",
-                                  "horaFinalActividad",
-                                  "horaFinalDesplazamiento",
-                                ].map((campo) => (
-                                  <td key={campo}>
-                                    <textarea
-                                      value={fila[campo] || ""}
-                                      onChange={(event) =>
-                                        actualizarCampoTiempo(
-                                          indice,
-                                          campo,
-                                          event.target.value,
-                                        )
-                                      }
-                                    ></textarea>
-                                  </td>
-                                ))}
-                              </tr>
-                            ))}
-                        </tbody>
-                      </table>
-                    </section>
-
-                    <section className="bloque-final-informe">
-                      <div>EQUIPOS Y RECURSOS</div>
-                      <textarea
-                        value={informeActual.equiposRecursos || ""}
-                        onChange={(event) =>
-                          actualizarCampo("equiposRecursos", event.target.value)
-                        }
-                      ></textarea>
-                    </section>
-                  </section>
-                )}
+                    );
+                  })}
               </Fragment>
             );
           })}
@@ -3809,17 +4126,27 @@ function Informes() {
 
       <div className="informes-seleccion-barra">
         <span>
-          {informesSeleccionados.length
-            ? `${informesSeleccionados.length} informe(s) seleccionado(s)`
-            : "Seleccione uno o varios informes para descargarlos en PDF."}
+          {descargandoPdf
+            ? `⏳ Descargando PDF ${progresoDescargaPdf.actual} de ${progresoDescargaPdf.total}...`
+            : informesSeleccionados.length
+              ? `${informesSeleccionados.length} informe(s) seleccionado(s)`
+              : "Seleccione uno o varios informes para descargarlos en PDF."}
         </span>
         <button
           type="button"
           className="btn-tabla"
-          disabled={!informesSeleccionados.length}
+          disabled={
+            !informesSeleccionados.length ||
+            descargandoPdf ||
+            generandoPdfLote.activo
+          }
           onClick={descargarInformesSeleccionados}
         >
-          Descargar PDF
+          {descargandoPdf
+            ? "⏳ Descargando..."
+            : generandoPdfLote.activo
+              ? "⏳ Generando..."
+              : "Descargar PDF"}
         </button>
       </div>
 
@@ -3948,7 +4275,6 @@ function Informes() {
         )}
       </div>
 
-      {/* 🔧 OPCIÓN 3: overlay mientras se generan PDFs en lote. */}
       {generandoPdfLote.activo && (
         <div
           style={{

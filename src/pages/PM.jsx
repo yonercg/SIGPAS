@@ -182,6 +182,8 @@ function PM() {
   const [filtroAnio, setFiltroAnio] = useState("Todos");
   const [filtroSemana, setFiltroSemana] = useState("Todas");
   const [filtroEstado, setFiltroEstado] = useState("Todos");
+  // 🔹 NUEVO — filtro por tipo
+  const [filtroTipo, setFiltroTipo] = useState("Todos");
 
   const { actividades } = useActividades();
 
@@ -397,10 +399,21 @@ function PM() {
     if (!valor) return null;
     if (valor instanceof Date) return valor;
 
-    const fecha = new Date(valor);
-    if (!Number.isNaN(fecha.getTime())) return fecha;
-
     if (typeof valor === "string") {
+      // 🔹 FIX: Formato ISO "YYYY-MM-DD" → parsear como LOCAL, no UTC.
+      // Sin esto, new Date("2026-10-05") se interpreta como medianoche UTC
+      // y en Colombia (UTC-5) se corre al domingo anterior, desplazando
+      // la semana ISO una unidad hacia atrás.
+      const matchISO = valor.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (matchISO) {
+        const anio = Number(matchISO[1]);
+        const mes = Number(matchISO[2]) - 1;
+        const dia = Number(matchISO[3]);
+        const fechaLocal = new Date(anio, mes, dia);
+        if (!Number.isNaN(fechaLocal.getTime())) return fechaLocal;
+      }
+
+      // Formato "DD/MM/YYYY" (por si llega algún dato heredado)
       const partes = valor.split("/");
       if (partes.length === 3) {
         const dia = Number(partes[0]);
@@ -410,7 +423,10 @@ function PM() {
         if (!Number.isNaN(fechaManual.getTime())) return fechaManual;
       }
     }
-    return null;
+
+    // Fallback (raro, pero por seguridad)
+    const fecha = new Date(valor);
+    return Number.isNaN(fecha.getTime()) ? null : fecha;
   };
 
   const obtenerSemanaISO = (fecha) => {
@@ -677,6 +693,14 @@ function PM() {
   }
 
   // =================================================
+  // TIPOS DISPONIBLES (🔹 NUEVO)
+  // =================================================
+
+  const tiposDisponibles = Array.from(
+    new Set(actividadesPM.map((a) => a.tipo).filter(Boolean)),
+  ).sort((a, b) => a.localeCompare(b, "es"));
+
+  // =================================================
   // FILTROS
   // =================================================
 
@@ -694,13 +718,19 @@ function PM() {
     const coincideEstado =
       filtroEstado === "Todos" || estadoActual === filtroEstado;
 
-    return coincideAnio && coincideSemana && coincideEstado;
+    // 🔹 NUEVO — coincidencia por tipo
+    const coincideTipo =
+      filtroTipo === "Todos" || actividad.tipo === filtroTipo;
+
+    return coincideAnio && coincideSemana && coincideEstado && coincideTipo;
   });
 
   const limpiarFiltros = () => {
     setFiltroAnio("Todos");
     setFiltroSemana("Todas");
     setFiltroEstado("Todos");
+    // 🔹 NUEVO
+    setFiltroTipo("Todos");
   };
 
   // =================================================
@@ -773,6 +803,23 @@ function PM() {
                 </select>
               </div>
 
+              {/* 🔹 NUEVO — Filtro por Tipo */}
+              <div className="pm-filtro">
+                <label htmlFor="filtroTipo">Tipo</label>
+                <select
+                  id="filtroTipo"
+                  value={filtroTipo}
+                  onChange={(e) => setFiltroTipo(e.target.value)}
+                >
+                  <option value="Todos">Todos</option>
+                  {tiposDisponibles.map((tipo) => (
+                    <option key={tipo} value={tipo}>
+                      {tipo}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div className="pm-filtro">
                 <label htmlFor="filtroEstado">Estado</label>
                 <select
@@ -790,7 +837,8 @@ function PM() {
 
               {(filtroAnio !== "Todos" ||
                 filtroSemana !== "Todas" ||
-                filtroEstado !== "Todos") && (
+                filtroEstado !== "Todos" ||
+                filtroTipo !== "Todos") && (
                 <button
                   type="button"
                   className="pm-btn-limpiar-filtros"

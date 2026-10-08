@@ -437,8 +437,19 @@ async function generarPDFDeHoja(hojaElement, nombreArchivo, datosOT = null) {
   `;
   contenedorClon.appendChild(styleOverride);
 
+  // ============================================================
+  // 🔹 Capturar los .value REALES de los textareas ANTES de clonar.
+  //    cloneNode(true) NO preserva el .value actual de un textarea,
+  //    solo su defaultValue (vacío). Por eso hay que leerlos aquí.
+  // ============================================================
+  const textareasOriginales = Array.from(
+    hojaElement.querySelectorAll("textarea"),
+  );
+  const textareasValores = textareasOriginales.map((el) => el.value || "");
+
   // Clonar la hoja
   const clon = hojaElement.cloneNode(true);
+
   clon.style.boxShadow = "none";
   clon.style.margin = "0";
   clon.style.transform = "none";
@@ -478,13 +489,26 @@ async function generarPDFDeHoja(hojaElement, nombreArchivo, datosOT = null) {
   });
 
   // FIX 3: Inputs y textareas → divs con formato de fechas
+  //
+  // 🔹 FIX: los textareas usan los valores capturados ANTES del clone
+  // (cloneNode pierde el .value). Se recorren por índice porque el
+  // orden de textareas en el clon es el mismo que en el original.
+  let idxTextareaClon = 0;
+
   clon
     .querySelectorAll(
       'input:not([type="radio"]):not([type="checkbox"]):not([type="file"]), textarea',
     )
     .forEach((el) => {
       const div = document.createElement("div");
-      const valor = el.value || "";
+
+      let valor;
+      if (el.tagName === "TEXTAREA") {
+        valor = textareasValores[idxTextareaClon] ?? el.value ?? "";
+        idxTextareaClon++;
+      } else {
+        valor = el.value || "";
+      }
 
       if (el.type === "date" && valor) {
         const [y, m, d] = valor.split("-");
@@ -523,8 +547,10 @@ async function generarPDFDeHoja(hojaElement, nombreArchivo, datosOT = null) {
   // FIX 4.5: CELDA DE DESCRIPCIÓN (rowSpan={13}) → DIV SIMPLE
   // ============================================================
   clon.querySelectorAll(".ot-celda-descripcion").forEach((td) => {
-    const textarea = td.querySelector("textarea");
-    const value = textarea ? textarea.value : "";
+    // 🔹 FIX: leer el valor directamente desde `datosOT` (estado actual
+    // de React). No leer del textarea clonado porque cloneNode pierde
+    // su .value y siempre devolvería "".
+    const value = (datosOT && datosOT.descripcionActividadesRealizadas) || "";
 
     td.innerHTML = "";
     td.className = "ot-celda-descripcion";

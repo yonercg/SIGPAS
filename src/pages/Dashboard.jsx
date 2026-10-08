@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useActividades } from "../context/ActividadesContext";
+import { supabase } from "../lib/supabase";
 import "./Dashboard.css";
-
-const CLAVE_PM = "sigpas_plan_mantenimiento";
 
 /* ========================================================= */
 /* MESES */
@@ -84,6 +83,15 @@ const normalizarTexto = (texto) => {
 };
 
 /* ========================================================= */
+/* NORMALIZACIÓN DE ID PM */
+/* ========================================================= */
+
+const normalizarPMId = (valor) =>
+  String(valor || "")
+    .trim()
+    .toUpperCase();
+
+/* ========================================================= */
 /* NORMALIZACIÓN DE TIPOS PM */
 /* ========================================================= */
 
@@ -110,7 +118,7 @@ const tiposGrupo50Normalizados = new Set(
 const claveConsignasPM = normalizarTipoPM("Consignas");
 
 /* ========================================================= */
-/* FECHA DE ACTIVIDAD */
+/* FECHA DE ACTIVIDAD (🔹 FIX: parseo LOCAL, no UTC) */
 /* ========================================================= */
 
 const obtenerFecha = (actividad) => {
@@ -120,6 +128,25 @@ const obtenerFecha = (actividad) => {
     actividad.fechaProgramacion || actividad.fecha || actividad.fechaActividad;
 
   if (!fecha) return null;
+
+  // Si ya es Date, devolver
+  if (fecha instanceof Date) {
+    return Number.isNaN(fecha.getTime()) ? null : fecha;
+  }
+
+  // 🔹 FIX: parsear strings ISO "YYYY-MM-DD" como fecha LOCAL
+  // Sin esto, en Colombia (UTC-5) las fechas se corren un día hacia atrás
+  // y las actividades aparecen en el mes/trimestre anterior.
+  if (typeof fecha === "string") {
+    const matchISO = fecha.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (matchISO) {
+      const anio = Number(matchISO[1]);
+      const mes = Number(matchISO[2]) - 1;
+      const dia = Number(matchISO[3]);
+      const fechaLocal = new Date(anio, mes, dia);
+      if (!Number.isNaN(fechaLocal.getTime())) return fechaLocal;
+    }
+  }
 
   const fechaConvertida = new Date(fecha);
 
@@ -261,46 +288,6 @@ const obtenerInformacionFechaPM = (actividad) => {
 };
 
 /* ========================================================= */
-/* CARGAR ACTIVIDADES PM */
-/* ========================================================= */
-
-const cargarActividadesPM = () => {
-  try {
-    const datosGuardados = localStorage.getItem(CLAVE_PM);
-
-    if (!datosGuardados) {
-      return [];
-    }
-
-    const datos = JSON.parse(datosGuardados);
-
-    if (!Array.isArray(datos)) {
-      return [];
-    }
-
-    return datos;
-  } catch (error) {
-    console.error("Error al cargar actividades PM:", error);
-
-    return [];
-  }
-};
-
-/* ========================================================= */
-/* CARGAR TEXTO PM DEL LOCALSTORAGE */
-/* ========================================================= */
-
-const obtenerDatosPMStorage = () => {
-  try {
-    return localStorage.getItem(CLAVE_PM) || "";
-  } catch (error) {
-    console.error("Error al consultar actividades PM:", error);
-
-    return "";
-  }
-};
-
-/* ========================================================= */
 /* OBTENER CATEGORÍA NT */
 /* ========================================================= */
 
@@ -388,62 +375,49 @@ function Dashboard() {
   const [mesSeleccionado, setMesSeleccionado] = useState("Todos");
 
   /* ========================================================= */
-  /* ACTIVIDADES PM */
+  /* ACTIVIDADES PM (🔹 AHORA DESDE SUPABASE) */
   /* ========================================================= */
 
-  const [actividadesPM, setActividadesPM] = useState(() =>
-    cargarActividadesPM(),
-  );
+  const [actividadesPM, setActividadesPM] = useState([]);
 
-  /* ========================================================= */
-  /* REFERENCIA DE PM EN LOCALSTORAGE */
-  /* ========================================================= */
-
-  const ultimaPMStorageRef = useRef("");
-
-  /* ========================================================= */
-  /* ACTUALIZAR PM */
-  /* ========================================================= */
+  const [cargandoPM, setCargandoPM] = useState(true);
 
   useEffect(() => {
-    const sincronizarPM = () => {
-      const datosGuardados = obtenerDatosPMStorage();
+    let activo = true;
 
-      if (datosGuardados === ultimaPMStorageRef.current) {
-        return;
-      }
-
-      ultimaPMStorageRef.current = datosGuardados;
-
+    (async () => {
       try {
-        if (!datosGuardados) {
+        const { data, error } = await supabase
+          .from("pm")
+          .select("datos")
+          .eq("id", "plan")
+          .maybeSingle();
+
+        if (!activo) return;
+
+        if (error) {
+          console.error("Error cargando PM desde Supabase:", error);
           setActividadesPM([]);
           return;
         }
 
-        const datos = JSON.parse(datosGuardados);
+        const datos = Array.isArray(data?.datos) ? data.datos : [];
 
-        if (Array.isArray(datos)) {
-          setActividadesPM(datos);
-        } else {
-          setActividadesPM([]);
-        }
-      } catch (error) {
-        console.error("Error al actualizar actividades PM:", error);
+        setActividadesPM(datos);
+      } catch (err) {
+        console.error("Error inesperado cargando PM:", err);
+        setActividadesPM([]);
+      } finally {
+        if (activo) setCargandoPM(false);
       }
-    };
-
-    ultimaPMStorageRef.current = obtenerDatosPMStorage();
-
-    window.addEventListener("storage", sincronizarPM);
-    window.addEventListener("focus", sincronizarPM);
+    })();
 
     return () => {
-      window.removeEventListener("storage", sincronizarPM);
-      window.removeEventListener("focus", sincronizarPM);
+      activo = false;
     };
   }, []);
 
+  // ⚠️ FIN DE LA PARTE 1 — continúa con la PARTE 2 justo debajo.
   /* ========================================================= */
   /* ACTIVIDADES INDEXADAS */
   /* ========================================================= */
@@ -550,15 +524,6 @@ function Dashboard() {
       /* ===================================================== */
       /* BACKLOG */
       /* ===================================================== */
-      /*
-        El BACKLOG ahora compara:
-          - Ejecutadas (estado "Ejecutada")
-          - Ejecutadas Reprogramadas (estado "Ejecutado Reprogramado")
-
-        Se conserva la misma estructura visual (torta + barras
-        mensuales + leyenda), solo cambia la fuente del segundo
-        grupo.
-      */
 
       backlogEjecutadas: 0,
       backlogEjecutadasReprogramadas: 0,
@@ -647,15 +612,6 @@ function Dashboard() {
       /* ----------------------------------------------------- */
       /* BACKLOG */
       /* ----------------------------------------------------- */
-      /*
-        El BACKLOG ahora toma actividades que:
-
-        1. Tengan código OT.
-        2. Estén en estado Ejecutada o Ejecutado Reprogramado.
-
-        Las actividades Reprogramadas y Pendientes NO
-        participan en este recuadro.
-      */
 
       if (
         tieneCodigoOT(actividad) &&
@@ -690,13 +646,11 @@ function Dashboard() {
 
       /* ----------------------------------------------------- */
       /* EJECUCIÓN: NT + TIPO DE MANTENIMIENTO */
+      /* (🔹 SIN FILTRO DE ESTADO — cuenta TODAS las actividades */
+      /*  que tengan Preventivo/Correctivo/Predictivo + NT)      */
       /* ----------------------------------------------------- */
 
-      if (
-        estado === "Ejecutada" ||
-        estado === "Reprogramada" ||
-        estado === "Emergencia"
-      ) {
+      {
         const categoria = obtenerCategoriaMantenimiento(actividad);
 
         const tipoMantenimiento = obtenerTipoMantenimientoIntegral(actividad);
@@ -712,6 +666,7 @@ function Dashboard() {
 
       /* ----------------------------------------------------- */
       /* TIPO DE MANTENIMIENTO INTEGRAL */
+      /* (sin filtro de estado)                                  */
       /* ----------------------------------------------------- */
 
       const tipoMantenimiento = obtenerTipoMantenimientoIntegral(actividad);
@@ -845,6 +800,13 @@ function Dashboard() {
   /* ========================================================= */
   /* INDICADOR PM */
   /* ========================================================= */
+  /*
+    Reglas:
+      - "Programadas" = PM planeadas en el periodo (por semana del PM).
+      - "Ejecutadas"  = PM cuya EJECUCIÓN REAL (según Programación)
+                        cae dentro del periodo. Si se reprogramó a otra
+                        semana/trimestre, cuenta en el periodo REAL.
+  */
 
   const indicadorPM = useMemo(() => {
     const contadores = {};
@@ -865,6 +827,46 @@ function Dashboard() {
     let programadasConsignas = 0;
     let ejecutadasConsignas = 0;
 
+    /* ---------------------------------------------------- */
+    /* MAPA: pmId -> Actividad de Programación */
+    /* ---------------------------------------------------- */
+
+    const actividadesPorPmId = new Map();
+
+    actividades.forEach((a) => {
+      if (a && a.pmId) {
+        actividadesPorPmId.set(normalizarPMId(a.pmId), a);
+      }
+    });
+
+    /* ---------------------------------------------------- */
+    /* Verifica si una fecha cae en el periodo seleccionado */
+    /* ---------------------------------------------------- */
+
+    const coincideConPeriodo = (fechaObj) => {
+      if (!fechaObj) return false;
+
+      if (fechaObj.getFullYear() !== Number(anioSeleccionado)) {
+        return false;
+      }
+
+      const mes = fechaObj.getMonth() + 1;
+
+      if (mesSeleccionado !== "Todos") {
+        return mes === Number(mesSeleccionado);
+      }
+
+      if (trimestreSeleccionado !== "Todos") {
+        return Math.ceil(mes / 3) === Number(trimestreSeleccionado);
+      }
+
+      return true;
+    };
+
+    /* ---------------------------------------------------- */
+    /* 1) PROGRAMADAS: PM planeadas en el periodo */
+    /* ---------------------------------------------------- */
+
     actividadesPMMostradas.forEach((item) => {
       const tipoNormalizado = item.tipoNormalizado;
 
@@ -874,40 +876,60 @@ function Dashboard() {
         return;
       }
 
-      const actividad = item.actividad;
-
       datos.programadas += 1;
-
       totalProgramadas += 1;
-
-      if (actividad?.estado === "E" || actividad?.estado === "ER") {
-        datos.ejecutadas += 1;
-
-        totalEjecutadas += 1;
-      }
-
-      /* ----------------------------------------------------- */
-      /* GRUPO 50% */
-      /* ----------------------------------------------------- */
 
       if (tiposGrupo50Normalizados.has(tipoNormalizado)) {
         programadasGrupo50 += 1;
-
-        if (actividad?.estado === "E" || actividad?.estado === "ER") {
-          ejecutadasGrupo50 += 1;
-        }
       }
-
-      /* ----------------------------------------------------- */
-      /* CONSIGNAS */
-      /* ----------------------------------------------------- */
 
       if (tipoNormalizado === claveConsignasPM) {
         programadasConsignas += 1;
+      }
+    });
 
-        if (actividad?.estado === "E" || actividad?.estado === "ER") {
-          ejecutadasConsignas += 1;
-        }
+    /* ---------------------------------------------------- */
+    /* 2) EJECUTADAS: por FECHA REAL de ejecución */
+    /* ---------------------------------------------------- */
+
+    actividadesPM.forEach((pmAct) => {
+      const pmIdNorm = normalizarPMId(pmAct.pmId);
+
+      if (!pmIdNorm) return;
+
+      const progAct = actividadesPorPmId.get(pmIdNorm);
+
+      if (!progAct) return;
+
+      const estadoProg = normalizarTexto(progAct.estado);
+
+      const esEjecutada =
+        estadoProg === "ejecutada" || estadoProg === "ejecutado reprogramado";
+
+      if (!esEjecutada) return;
+
+      // La fecha `fecha` de la actividad de Programación es la fecha
+      // actual (se actualiza al reprogramar). Es la que define el
+      // trimestre real de ejecución.
+      const fechaEjecucion = obtenerFecha({ fecha: progAct.fecha });
+
+      if (!coincideConPeriodo(fechaEjecucion)) return;
+
+      const tipoNormalizado = normalizarTipoPM(pmAct.tipo);
+
+      const datos = contadores[tipoNormalizado];
+
+      if (!datos) return;
+
+      datos.ejecutadas += 1;
+      totalEjecutadas += 1;
+
+      if (tiposGrupo50Normalizados.has(tipoNormalizado)) {
+        ejecutadasGrupo50 += 1;
+      }
+
+      if (tipoNormalizado === claveConsignasPM) {
+        ejecutadasConsignas += 1;
       }
     });
 
@@ -938,11 +960,13 @@ function Dashboard() {
     /* ------------------------------------------------------- */
     /* PORCENTAJE GRUPO 50% */
     /* ------------------------------------------------------- */
+    /* Si el grupo no tiene programadas, se considera 100%
+       cumplido (no hay nada que ejecutar). */
 
     const porcentajeGrupo50 =
       programadasGrupo50 > 0
         ? (ejecutadasGrupo50 / programadasGrupo50) * 100
-        : 0;
+        : 100;
 
     /* ------------------------------------------------------- */
     /* PORCENTAJE CONSIGNAS */
@@ -951,17 +975,24 @@ function Dashboard() {
     const porcentajeConsignas =
       programadasConsignas > 0
         ? (ejecutadasConsignas / programadasConsignas) * 100
-        : 0;
+        : 100;
 
     /* ------------------------------------------------------- */
     /* PONDERACIÓN */
     /* ------------------------------------------------------- */
 
     const aporteGrupo50 = porcentajeGrupo50 * 0.5;
-
     const aporteConsignas = porcentajeConsignas * 0.5;
 
-    const indicadorFinal = Math.min(aporteGrupo50 + aporteConsignas, 100);
+    /* Si NINGÚN grupo tiene programadas, no hay datos que medir
+       → indicador = 0% (para no mostrar 100% sin información). */
+
+    const hayAlgoProgramado =
+      programadasGrupo50 > 0 || programadasConsignas > 0;
+
+    const indicadorFinal = hayAlgoProgramado
+      ? Math.min(aporteGrupo50 + aporteConsignas, 100)
+      : 0;
 
     /* ------------------------------------------------------- */
     /* CUMPLIMIENTO TOTAL SIMPLE */
@@ -989,7 +1020,14 @@ function Dashboard() {
       totalEjecutadas,
       porcentajeTotalSimple,
     };
-  }, [actividadesPMMostradas]);
+  }, [
+    actividadesPMMostradas,
+    actividadesPM,
+    actividades,
+    anioSeleccionado,
+    trimestreSeleccionado,
+    mesSeleccionado,
+  ]);
 
   /* ========================================================= */
   /* ANÁLISIS DE GESTIÓN PM */
@@ -1559,8 +1597,9 @@ function Dashboard() {
                   <strong>{indicadorPM.porcentajeGrupo50.toFixed(0)}%</strong>
 
                   <span>
-                    {indicadorPM.ejecutadasGrupo50} de{" "}
-                    {indicadorPM.programadasGrupo50} ejecutadas
+                    {indicadorPM.programadasGrupo50 > 0
+                      ? `${indicadorPM.ejecutadasGrupo50} de ${indicadorPM.programadasGrupo50} ejecutadas`
+                      : "Sin programadas · 100% por defecto"}
                   </span>
                 </div>
 
@@ -1580,8 +1619,9 @@ function Dashboard() {
                   <strong>{indicadorPM.porcentajeConsignas.toFixed(0)}%</strong>
 
                   <span>
-                    {indicadorPM.ejecutadasConsignas} de{" "}
-                    {indicadorPM.programadasConsignas} ejecutadas
+                    {indicadorPM.programadasConsignas > 0
+                      ? `${indicadorPM.ejecutadasConsignas} de ${indicadorPM.programadasConsignas} ejecutadas`
+                      : "Sin programadas · 100% por defecto"}
                   </span>
                 </div>
 
@@ -1666,6 +1706,7 @@ function Dashboard() {
           </div>
         </div>
       </section>
+
       {/* ================================================= */}
       {/* ANÁLISIS DE GESTIÓN DEL PLAN DE MANTENIMIENTO */}
       {/* ================================================= */}
@@ -1781,7 +1822,7 @@ function Dashboard() {
 
                 <h2>Actividades de mantenimiento</h2>
 
-                <p>Ejecutadas · {nombrePeriodo}</p>
+                <p>Todas · {nombrePeriodo}</p>
               </div>
 
               <span className="chart-periodo">{nombrePeriodo}</span>
