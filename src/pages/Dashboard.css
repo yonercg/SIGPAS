@@ -214,7 +214,7 @@
   height: 32px;
   flex-shrink: 0;
   border-radius: 50%;
-  font-size: 14px;
+  font-size: 20px;
   line-height: 1;
 }
 
@@ -228,7 +228,7 @@
 .dashboard-card-content span {
   overflow: hidden;
   color: #747a80;
-  font-size: 7px;
+  font-size: 10px;
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -244,7 +244,7 @@
 .dashboard-card-content small {
   margin-top: 1px;
   color: #a0a5aa;
-  font-size: 6.5px;
+  font-size: 10px;
 }
 
 /* ================================================= */
@@ -282,7 +282,7 @@
 .dashboard-charts {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 14px;
+  gap: 10px;
   width: 100%;
   max-width: 100%;
   margin: 0;
@@ -297,7 +297,7 @@
   box-sizing: border-box;
   background: #ffffff;
   border: 1px solid #e6e8ea;
-  border-radius: 8px;
+  border-radius: 15px;
   box-shadow: 0 2px 9px rgba(0, 0, 0, 0.025);
 }
 
@@ -455,21 +455,21 @@
 
 .pie-info-item span:not(.pie-info-dot) {
   color: #747a80;
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 600;
 }
 
 .pie-info-item strong {
   margin-top: 2px;
   color: #30353a;
-  font-size: 14px;
+  font-size: 18px;
   font-weight: 700;
 }
 
 .pie-info-item small {
   margin-top: 2px;
   color: #a0a5aa;
-  font-size: 7px;
+  font-size: 12px;
 }
 
 /* ================================================= */
@@ -481,11 +481,11 @@
   align-items: center;
   justify-content: center;
   gap: 7px;
-  min-height: 34px;
+  min-height: 20px;
   padding: 0 10px 10px;
   box-sizing: border-box;
   color: #8d9398;
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .chart-backlog-total strong {
@@ -510,7 +510,7 @@
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  width: 22px;
+  width: 10px;
   padding-bottom: 42px;
   box-sizing: border-box;
   color: #a0a5aa;
@@ -584,7 +584,7 @@
   justify-content: center;
   width: 28%;
   max-width: 13px;
-  min-width: 4px;
+  min-width: 5px;
   height: 100%;
 }
 
@@ -621,7 +621,7 @@
   left: 50%;
   transform: translateX(-50%);
   color: #60666b;
-  font-size: 7px;
+  font-size: 9px;
   font-weight: 700;
   line-height: 10px;
   text-align: center;
@@ -793,7 +793,7 @@
 .pm-indicator-score span {
   margin-top: 5px;
   color: #8a9095;
-  font-size: 7px;
+  font-size: 9px;
   font-weight: 600;
   text-align: center;
 }
@@ -878,7 +878,7 @@
 .pm-weight-title span {
   overflow: hidden;
   color: #747a80;
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -936,14 +936,14 @@
   align-items: center;
   justify-content: center;
   min-height: 50px;
-  padding: 7px;
+  padding: 9px;
   background: #ffffff;
   box-sizing: border-box;
 }
 
 .pm-total-summary span {
   color: #969ca1;
-  font-size: 7px;
+  font-size: 9px;
   text-align: center;
 }
 
@@ -977,7 +977,7 @@
   border-bottom: 1px solid #e5e8ea;
   background: #f7f8f9;
   color: #747a80;
-  font-size: 7px;
+  font-size: 8px;
   font-weight: 700;
   text-align: center;
   text-transform: uppercase;
@@ -1000,7 +1000,7 @@
   padding: 6px 8px;
   border-bottom: 1px solid #f0f1f2;
   color: #60666b;
-  font-size: 8px;
+  font-size: 10px;
   text-align: center;
   box-sizing: border-box;
 }
@@ -1017,7 +1017,7 @@
   display: block;
   overflow: hidden;
   color: #60666b;
-  font-size: 8px;
+  font-size: 10px;
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1025,7 +1025,7 @@
 
 .pm-table-wrapper tbody td strong {
   color: #30353a;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
 }
 
@@ -1134,7 +1134,7 @@
   margin: 0;
   overflow: hidden;
   color: #969ca1;
-  font-size: 8px;
+  font-size: 10px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1159,7 +1159,7 @@
   padding-bottom: 42px;
   box-sizing: border-box;
   color: #a0a5aa;
-  font-size: 7px;
+  font-size: 9px;
   text-align: right;
 }
 
@@ -1248,7 +1248,7 @@
   left: 50%;
   transform: translateX(-50%);
   color: #60666b;
-  font-size: 7px;
+  font-size: 10px;
   font-weight: 700;
   line-height: 10px;
   white-space: nowrap;

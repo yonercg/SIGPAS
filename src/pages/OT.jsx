@@ -1,3 +1,4 @@
+import { useAuth } from "../context/AuthContext";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useActividades } from "../context/ActividadesContext";
@@ -1421,6 +1422,7 @@ function OTListado({
 // =========================================================
 
 function OT() {
+  const { esCuadrilla, cuadrillaUsuario } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const actividadId = searchParams.get("actividadId");
@@ -1434,8 +1436,22 @@ function OT() {
     eliminarOT,
   } = useActividades();
 
-  const actividadSeleccionada =
-    actividades.find((a) => String(a.id) === String(actividadId)) || null;
+  const actividadSeleccionada = (() => {
+    const encontrada =
+      actividades.find((a) => String(a.id) === String(actividadId)) || null;
+
+    if (!encontrada) return null;
+
+    // 🔒 Verificar pertenencia
+    if (esCuadrilla) {
+      const cid = encontrada.cuadrillaId || encontrada.cuadrilla || "";
+      if (String(cid) !== String(cuadrillaUsuario)) {
+        return null; // dispara la pantalla "Actividad no encontrada"
+      }
+    }
+
+    return encontrada;
+  })();
 
   const [ot, setOt] = useState(() => obtenerEstructuraOTVacia());
   const [mensajeGuardado, setMensajeGuardado] = useState("");
@@ -1850,9 +1866,17 @@ function OT() {
   const volverListado = () => navigate("/ot");
 
   if (!actividadId) {
+    // 🔒 Usuario cuadrilla: solo ve OTs de SUS actividades
+    const actividadesVisibles = esCuadrilla
+      ? actividades.filter((act) => {
+          const cid = act.cuadrillaId || act.cuadrilla || "";
+          return String(cid) === String(cuadrillaUsuario);
+        })
+      : actividades;
+
     return (
       <OTListado
-        actividades={actividades}
+        actividades={actividadesVisibles}
         obtenerOTPorActividad={obtenerOTPorActividad}
         eliminarOT={eliminarOT}
         navigate={navigate}

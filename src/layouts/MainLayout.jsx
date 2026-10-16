@@ -4,7 +4,13 @@ import "./MainLayout.css";
 
 function MainLayout() {
   const location = useLocation();
-  const { usuarioActual, cerrarSesion, tienePermiso } = useAuth();
+  const {
+    usuarioActual,
+    cerrarSesion,
+    tienePermiso,
+    esCuadrilla, // 👈 NUEVO
+    cuadrillaUsuario, // 👈 NUEVO
+  } = useAuth();
 
   return (
     <div className="main-layout">
@@ -16,10 +22,12 @@ function MainLayout() {
 
         <nav className="sidebar-menu">
           {/* INICIO */}
-          <Link to="/" className={location.pathname === "/" ? "active" : ""}>
-            <span>🏠</span>
-            Inicio
-          </Link>
+          {!esCuadrilla && (
+            <Link to="/" className={location.pathname === "/" ? "active" : ""}>
+              <span>🏠</span>
+              Inicio
+            </Link>
+          )}
 
           {/* DASHBOARD */}
           {tienePermiso("dashboard") && (
@@ -100,7 +108,8 @@ function MainLayout() {
         </nav>
 
         <div className="sidebar-footer">
-          SIGPAS--------------------------------ING. Yoner Caicedo
+          SIGPAS
+          <div> ---------------------ING. Yoner Caicedo</div>
           <span>v1.0</span>
         </div>
       </aside>
@@ -120,7 +129,10 @@ function MainLayout() {
                 {usuarioActual?.nombre || "Usuario"}
               </span>
 
-              <span className="user-area-rol">{usuarioActual?.rol || ""}</span>
+              <span className="user-area-rol">
+                {usuarioActual?.rol || ""}
+                {cuadrillaUsuario ? ` · ${cuadrillaUsuario}` : ""}
+              </span>
             </div>
 
             <button

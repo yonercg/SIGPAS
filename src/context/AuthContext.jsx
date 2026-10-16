@@ -29,6 +29,7 @@ function deSupabase(fila) {
     email: fila.email || "",
     passwordHash: fila.password_hash,
     rol: fila.rol,
+    cuadrilla: fila.cuadrilla || null, // 👈 NUEVO
     activo: fila.activo,
     permisos: fila.permisos || {},
     fechaCreacion: fila.fecha_creacion,
@@ -120,6 +121,14 @@ export function AuthProvider({ children }) {
       if (errUpdate) {
         console.error("Error al actualizar último acceso:", errUpdate);
       }
+      // 🔒 Validación: usuario cuadrilla DEBE tener cuadrilla asignada
+      if (data.rol === "Cuadrilla" && !data.cuadrilla) {
+        return {
+          ok: false,
+          error:
+            "Usuario sin cuadrilla asignada. Contacte al administrador del sistema.",
+        };
+      }
 
       const usuario = deSupabase({ ...data, ultimo_acceso: ahora });
       setUsuarioActual(usuario);
@@ -193,6 +202,7 @@ export function AuthProvider({ children }) {
         email: datos.email?.trim() || null,
         password_hash: hash,
         rol: datos.rol,
+        cuadrilla: datos.cuadrilla || null, // 👈 NUEVO
         activo: datos.activo !== false,
         permisos: { ...datos.permisos },
       };
@@ -240,6 +250,7 @@ export function AuthProvider({ children }) {
         usuario: usuarioLimpio,
         email: datos.email?.trim() || null,
         rol: datos.rol,
+        cuadrilla: datos.cuadrilla || null, // 👈 NUEVO
         activo: datos.activo !== false,
         permisos: { ...datos.permisos },
       };
@@ -296,6 +307,14 @@ export function AuthProvider({ children }) {
     }
   };
 
+  // =========================================================
+  // HELPERS DE ROL (derivados, no hay que setear nada extra)
+  // =========================================================
+
+  const esAdmin = usuarioActual?.rol === "Administrador";
+  const esCuadrilla = usuarioActual?.rol === "Cuadrilla";
+  const cuadrillaUsuario = usuarioActual?.cuadrilla || null;
+
   const value = {
     usuarioActual,
     usuarios,
@@ -306,6 +325,9 @@ export function AuthProvider({ children }) {
     agregarUsuario,
     modificarUsuario,
     eliminarUsuario,
+    esAdmin,
+    esCuadrilla,
+    cuadrillaUsuario,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -1,3 +1,4 @@
+import { cuadrillas } from "../data/cuadrillas";
 import { useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import {
@@ -19,6 +20,7 @@ const formVacio = () => ({
   password: "",
   confirmar: "",
   rol: "Consulta",
+  cuadrilla: "",
   activo: true,
   permisos: obtenerPermisosPorDefecto("Consulta"),
 });
@@ -63,6 +65,7 @@ export default function Usuarios() {
       password: "",
       confirmar: "",
       rol: usuario.rol,
+      cuadrilla: usuario.cuadrilla || "",
       activo: usuario.activo !== false,
       permisos: { ...usuario.permisos },
     });
@@ -94,8 +97,7 @@ export default function Usuarios() {
     setFormulario((prev) => ({
       ...prev,
       rol: nuevoRol,
-      // Al cambiar el rol, se autocompletan los permisos por defecto.
-      // El admin igual puede ajustarlos después manualmente.
+      cuadrilla: nuevoRol === "Cuadrilla" ? prev.cuadrilla : "",
       permisos: obtenerPermisosPorDefecto(nuevoRol),
     }));
   };
@@ -143,6 +145,13 @@ export default function Usuarios() {
       return;
     }
 
+    if (formulario.rol === "Cuadrilla" && !formulario.cuadrilla) {
+      setErrorForm(
+        "Debe seleccionar la cuadrilla a la que pertenece el usuario.",
+      );
+      return;
+    }
+
     setGuardando(true);
 
     const datos = {
@@ -153,6 +162,7 @@ export default function Usuarios() {
       rol: formulario.rol,
       activo: formulario.activo,
       permisos: formulario.permisos,
+      cuadrilla: formulario.cuadrilla || null,
     };
 
     let resultado;
@@ -231,6 +241,7 @@ export default function Usuarios() {
                 <th>Usuario</th>
                 <th>Email</th>
                 <th>Rol</th>
+                <th>Cuadrilla</th>
                 <th>Estado</th>
                 <th>Último acceso</th>
                 <th>Acciones</th>
@@ -240,7 +251,7 @@ export default function Usuarios() {
             <tbody>
               {usuarios.length === 0 ? (
                 <tr>
-                  <td colSpan="7" className="usuarios-vacio">
+                  <td colSpan="8" className="usuarios-vacio">
                     No hay usuarios registrados.
                   </td>
                 </tr>
@@ -259,6 +270,16 @@ export default function Usuarios() {
                       <span className="usuarios-rol">{u.rol}</span>
                     </td>
                     <td>
+                      <td>
+                        {u.cuadrilla ? (
+                          <span className="usuarios-cuadrilla">
+                            {u.cuadrilla}
+                          </span>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+
                       <span
                         className={`usuarios-estado ${
                           u.activo ? "activo" : "inactivo"
@@ -403,6 +424,32 @@ export default function Usuarios() {
                     ))}
                   </select>
                 </div>
+
+                {formulario.rol === "Cuadrilla" && (
+                  <div className="usuarios-campo usuarios-campo-full">
+                    <label>Cuadrilla asignada *</label>
+                    <select
+                      value={formulario.cuadrilla}
+                      onChange={(e) =>
+                        cambiarCampo("cuadrilla", e.target.value)
+                      }
+                      required
+                    >
+                      <option value="">— Seleccione una cuadrilla —</option>
+                      {cuadrillas
+                        .filter((c) => c.activa)
+                        .map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.id} — {c.ingeniero}
+                          </option>
+                        ))}
+                    </select>
+                    <small style={{ color: "#6b7280", fontSize: 12 }}>
+                      El usuario solo verá las actividades, informes y OTs de
+                      esta cuadrilla.
+                    </small>
+                  </div>
+                )}
 
                 <div className="usuarios-campo usuarios-campo-checkbox">
                   <label className="usuarios-check">

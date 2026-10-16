@@ -13,6 +13,7 @@ import { useActividades } from "../context/ActividadesContext";
 import { supabase } from "../lib/supabase";
 import { cuadrillas } from "../data/cuadrillas";
 import "./Informes.css";
+import { useAuth } from "../context/AuthContext";
 
 const FILAS_ANOMALIAS_POR_HOJA = 6;
 const ESPACIOS_FOTOGRAFICOS_POR_HOJA = 4;
@@ -933,10 +934,16 @@ function ajustarAlturaPrimeraDescripcion(editor) {
 function crearInformeInicial(actividad = null) {
   const ahora = new Date().toISOString();
 
+  // 👇 NUEVO: la cuadrilla puede venir forzada (usuario cuadrilla) o
+  //    deducirse de la actividad (flujo normal del admin).
+  const cuadrillaId = cuadrillaOverride || actividad?.cuadrillaId || "";
+
   return {
     id: generarIdInforme(),
 
     actividadId: actividad?.id ?? null,
+
+    cuadrillaId, // 👈 NUEVO: a nivel raíz, para que se guarde en metadatos.
 
     numeroInforme: "",
 
@@ -1006,7 +1013,7 @@ function crearInformeInicial(actividad = null) {
           tipo: actividad.tipo ?? "",
           subestacion: actividad.subestacion ?? "",
           zona: actividad.zona ?? "",
-          cuadrillaId: actividad.cuadrillaId ?? "",
+          cuadrillaId: cuadrillaId,
           responsable: actividad.responsable ?? "",
           camioneta: actividad.camioneta ?? "",
           mantenimiento: actividad.mantenimiento ?? "",
@@ -1020,6 +1027,7 @@ function crearInformeInicial(actividad = null) {
    ============================================================ */
 
 function Informes() {
+  const { esCuadrilla, cuadrillaUsuario } = useAuth();
   const { actividades = [] } = useActividades();
 
   const [searchParams, setSearchParams] = useSearchParams();
@@ -1109,7 +1117,18 @@ function Informes() {
 
     (async () => {
       try {
-        const lista = await cargarInformesDesdeSupabase();
+        let lista = await cargarInformesDesdeSupabase();
+
+        // 🔒 Usuario cuadrilla: solo ve informes de SU cuadrilla
+        //    El cuadrillaId vive dentro de metadatos (o en actividadSnapshot).
+        if (esCuadrilla) {
+          lista = lista.filter((inf) => {
+            const cid =
+              inf.cuadrillaId || inf.actividadSnapshot?.cuadrillaId || "";
+            return String(cid) === String(cuadrillaUsuario);
+          });
+        }
+
         if (!activo) return;
         setInformes(lista);
       } catch (error) {
@@ -1129,7 +1148,7 @@ function Informes() {
     return () => {
       activo = false;
     };
-  }, []);
+  }, [esCuadrilla, cuadrillaUsuario]);
 
   /* ============================================================
      OPCIÓN 3: procesar la cola de PDFs que hay que generar.
@@ -1428,7 +1447,10 @@ function Informes() {
           actividadCreadaRef.current = actividadId;
 
           const nuevo = {
-            ...crearInformeInicial(actividad),
+            ...crearInformeInicial(
+              actividad,
+              esCuadrilla ? cuadrillaUsuario : null, // 👈 NUEVO
+            ),
             __contenidoCargado: true,
           };
           setInformeActual(nuevo);
@@ -1465,6 +1487,8 @@ function Informes() {
     informeActual?.__contenidoCargado,
     setSearchParams,
     cargandoInformes,
+    esCuadrilla,
+    cuadrillaUsuario,
   ]);
 
   /* ============================================================
@@ -2592,7 +2616,10 @@ function Informes() {
 
   function nuevoInforme() {
     const nuevo = {
-      ...crearInformeInicial(),
+      ...crearInformeInicial(
+        null,
+        esCuadrilla ? cuadrillaUsuario : null, // 👈 NUEVO
+      ),
       __contenidoCargado: true,
     };
 
@@ -2605,7 +2632,6 @@ function Informes() {
       informeId: nuevo.id,
     });
   }
-
   /* ============================================================
      ABRIR INFORME
      ============================================================ */

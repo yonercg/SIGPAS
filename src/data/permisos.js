@@ -52,6 +52,19 @@ export const ROLES = {
     ot: true,
     usuarios: false,
   },
+
+  // 👇 NUEVO: rol con acceso restringido a su propia cuadrilla.
+  //    El filtrado por cuadrilla se hace en el cliente (ver AuthContext
+  //    + Actividades / Informes / OT).
+  Cuadrilla: {
+    dashboard: false,
+    programacion: false,
+    pm: false,
+    actividades: true,
+    informes: true,
+    ot: true,
+    usuarios: false,
+  },
 };
 
 export const ROLES_LISTA = Object.keys(ROLES);

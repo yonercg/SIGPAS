@@ -480,18 +480,22 @@
 }
 
 /* ================================================= */
-/* BOTÓN DETALLES */
+/* BOTÓN DETALLES (compacto) */
 /* ================================================= */
 
 .pm-btn-detalles {
-  height: 27px;
-  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 12px;
   border: 1px solid #dfe3e6;
   border-radius: 5px;
   background: #ffffff;
   color: #6f767b;
   font-family: inherit;
-  font-size: 9px;
+  font-size: 9.5px;
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
@@ -507,10 +511,7 @@
   color: #4f575c;
 }
 
-/* ================================================= */
-/* DETALLES CON INFORMACIÓN */
-/* ================================================= */
-
+/* Detalles con información guardada (verde) */
 .pm-btn-detalles-activo {
   border-color: #b9ddc5;
   background: #edf8f0;
@@ -521,6 +522,30 @@
   background: #e3f4e8;
   border-color: #9fceb0;
   color: #3f8458;
+}
+
+/* Detalles con informe vinculado (azul) — va después para ganar si hay ambos */
+.pm-btn-detalles-con-informe {
+  border-color: #b8cbe4;
+  background: #f1f5fb;
+  color: #2f6fa3;
+}
+
+.pm-btn-detalles-con-informe:hover {
+  background: #e3ecf7;
+  border-color: #9fb9d8;
+  color: #245a86;
+}
+
+/* Puntito azul indicando "hay informe vinculado" */
+.pm-btn-detalles-indicador {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #2f6fa3;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 2px rgba(47, 111, 163, 0.15);
 }
 
 /* ================================================= */
@@ -851,4 +876,116 @@
   .pm-detalles-modal {
     width: 100%;
   }
+}
+
+/* =========================================================
+   CELDA DE DETALLES (solo botón compacto)
+   ========================================================= */
+
+.pm-tabla-detalles-celda {
+  min-width: 110px;
+  white-space: nowrap !important;
+}
+
+/* =========================================================
+   BLOQUE DEL INFORME DENTRO DEL MODAL DE DETALLES
+   ========================================================= */
+
+.pm-informe-detalle {
+  margin: 0 20px 16px;
+  padding: 12px 14px;
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  border-radius: 8px;
+}
+
+.pm-informe-detalle-titulo {
+  font-size: 12px;
+  font-weight: 700;
+  color: #2648af;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.pm-informe-detalle-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px 16px;
+}
+
+.pm-informe-detalle-grid > div {
+  display: flex;
+  flex-direction: column;
+}
+
+.pm-informe-detalle-grid span {
+  font-size: 10.5px;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.pm-informe-detalle-grid strong {
+  font-size: 13px;
+  color: #111827;
+}
+
+.pm-informe-detalle-link {
+  color: #2648af !important;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.pm-informe-detalle-link:hover {
+  color: #1a357f !important;
+  text-decoration: underline;
+}
+
+.pm-informe-detalle-link:focus-visible {
+  outline: 2px solid #2648af;
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* ================================================= */
+/* FILTRO DE BÚSQUEDA POR TEXTO                      */
+/* ================================================= */
+
+.pm-filtro-busqueda {
+  min-width: 190px;
+  flex: 1 1 190px;
+}
+
+.pm-filtro-busqueda input {
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid #dfe3e6;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #555b60;
+  font-family: inherit;
+  font-size: 9.5px;
+  font-weight: 500;
+  outline: none;
+  box-sizing: border-box;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease;
+}
+
+.pm-filtro-busqueda input::placeholder {
+  color: #a5aaae;
+}
+
+.pm-filtro-busqueda input:hover {
+  border-color: #cbd2d7;
+  background: #fafbfc;
+}
+
+.pm-filtro-busqueda input:focus {
+  border-color: #2f6fa3;
+  box-shadow: 0 0 0 2px rgba(47, 111, 163, 0.08);
 }

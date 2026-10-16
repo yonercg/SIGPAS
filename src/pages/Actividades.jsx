@@ -5,9 +5,11 @@ import { useActividades } from "../context/ActividadesContext";
 import { cuadrillas as cuadrillasData } from "../data/cuadrillas";
 import { supabase } from "../lib/supabase";
 import "./Actividades.css";
+import { useAuth } from "../context/AuthContext";
 
 function Actividades() {
   const navigate = useNavigate();
+  const { esAdmin, esCuadrilla, cuadrillaUsuario } = useAuth();
 
   // =========================================
   // ACTIVIDADES DESDE EL CONTEXT
@@ -699,9 +701,16 @@ function Actividades() {
   // filtrar automáticamente.
   // =========================================
 
-  const actividadesFiltradas = actividades.filter((actividad) =>
-    cumpleFiltros(actividad),
-  );
+  const actividadesFiltradas = actividades
+    .filter((actividad) => {
+      // 🔒 Usuario cuadrilla: solo ve SUS actividades
+      if (esCuadrilla) {
+        const cid = obtenerCuadrillaActividad(actividad);
+        if (String(cid) !== String(cuadrillaUsuario)) return false;
+      }
+      return true;
+    })
+    .filter((actividad) => cumpleFiltros(actividad));
 
   // =========================================
   // OPCIONES DE SEMANA
@@ -723,7 +732,9 @@ function Actividades() {
   // cuadrillas activas de ../data/cuadrillas.
   // =========================================
 
-  const cuadrillas = obtenerTodasCuadrillasActivas();
+  const cuadrillas = esCuadrilla
+    ? obtenerTodasCuadrillasActivas().filter((c) => c.id === cuadrillaUsuario)
+    : obtenerTodasCuadrillasActivas();
 
   // =========================================
   // OPCIONES DE ESTADO
