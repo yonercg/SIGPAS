@@ -1383,8 +1383,12 @@
 
 .ot-foto-zona-imagen {
   max-width: 100%;
-  max-height: 90px;
-  object-fit: contain;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain; /* 👈 ESTO ES LA CLAVE: Ajusta la imagen sin deformarla */
+  display: block;
+  margin: 0 auto;
 }
 
 .ot-foto-zona-icono {

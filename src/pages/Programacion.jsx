@@ -4,6 +4,10 @@ import { camionetas } from "../data/camionetas";
 import { useActividades } from "../context/ActividadesContext";
 import { supabase } from "../lib/supabase";
 import "./Programacion.css";
+import {
+  cargarCambiosManuales,
+  guardarCambiosManuales,
+} from "../lib/configuracion";
 
 // =========================================
 // CONFIGURACIÓN BASE DE PROGRAMACIÓN
@@ -232,17 +236,21 @@ function Programacion() {
   // CAMBIOS MANUALES PERSISTENTES
   // =========================================
 
-  const [cambiosManuales, setCambiosManuales] = useState(() => {
-    try {
-      const cambiosGuardados = localStorage.getItem("sigpas_cambios_manuales");
+  const [cambiosManuales, setCambiosManuales] = useState({});
+  const [cargandoCambios, setCargandoCambios] = useState(true);
 
-      return cambiosGuardados ? JSON.parse(cambiosGuardados) : {};
-    } catch (error) {
-      console.error("Error al cargar cambios de disponibilidad:", error);
-
-      return {};
-    }
-  });
+  useEffect(() => {
+    let activo = true;
+    cargarCambiosManuales().then((data) => {
+      if (activo) {
+        setCambiosManuales(data);
+        setCargandoCambios(false);
+      }
+    });
+    return () => {
+      activo = false;
+    };
+  }, []);
 
   // =========================================
   // PLANES PM DESDE SUPABASE
@@ -705,7 +713,6 @@ function Programacion() {
 
     if (!cuadrillaSeleccionada) {
       alert("Seleccione una cuadrilla.");
-
       return;
     }
 
@@ -713,43 +720,28 @@ function Programacion() {
       alert(
         "Solo C1, C2, C3 y C4 pueden participar en la rotación de disponibilidad.",
       );
-
       return;
     }
 
     if (!motivoCambio.trim()) {
       alert("Debe indicar el motivo del cambio.");
-
       return;
     }
 
     const claveSemana = `${anioActual}-${semanaActual}`;
 
-    setCambiosManuales((anteriores) => {
-      const nuevosCambios = {
-        ...anteriores,
+    const nuevosCambios = {
+      ...cambiosManuales,
+      [claveSemana]: {
+        cuadrillaId: cuadrillaSeleccionada,
+        motivo: motivoCambio.trim(),
+      },
+    };
 
-        [claveSemana]: {
-          cuadrillaId: cuadrillaSeleccionada,
-
-          motivo: motivoCambio.trim(),
-        },
-      };
-
-      try {
-        localStorage.setItem(
-          "sigpas_cambios_manuales",
-          JSON.stringify(nuevosCambios),
-        );
-      } catch (error) {
-        console.error("Error al guardar cambios de disponibilidad:", error);
-      }
-
-      return nuevosCambios;
-    });
+    setCambiosManuales(nuevosCambios);
+    guardarCambiosManuales(nuevosCambios); // 👈 Ahora se guarda en Supabase
 
     setMostrarFormulario(false);
-
     setMotivoCambio("");
   };
 

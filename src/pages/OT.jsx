@@ -4,6 +4,7 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import { useActividades } from "../context/ActividadesContext";
 import { cuadrillas as cuadrillasData } from "../data/cuadrillas";
 import "./OT.css";
+import { comprimirImagen, comprimirFirma } from "../utils/imagenes";
 
 // =========================================================
 // OPCIONES
@@ -1434,6 +1435,7 @@ function OT() {
     obtenerOTPorActividad,
     guardarOT: guardarOTContext,
     eliminarOT,
+    descargarOTCompleta, // 👈 NUEVO
   } = useActividades();
 
   const actividadSeleccionada = (() => {
@@ -1461,6 +1463,7 @@ function OT() {
   const pdfGeneradoRef = useRef(false);
   const otActualRef = useRef(ot);
   otActualRef.current = ot;
+  const [cargandoOT, setCargandoOT] = useState(false); // 👈 NUEVO
 
   const obtenerFechaInput = (fecha) => {
     if (!fecha) return "";
@@ -1507,45 +1510,57 @@ function OT() {
       setOt(obtenerEstructuraOTVacia());
       return;
     }
-    const otGuardada = obtenerOTPorActividad(actividadId);
-    if (otGuardada) {
-      setOt(fusionarConEstructura(otGuardada));
-      return;
-    }
-    const nueva = obtenerEstructuraOTVacia();
-    if (actividadSeleccionada) {
-      nueva.fechaEmision = fechaHoy();
-      nueva.numeroOT = actividadSeleccionada.codigoOT || "";
-      nueva.actividad = actividadSeleccionada.tipo || "";
-      nueva.descripcionOT = "";
-      nueva.tipoMTTO = actividadSeleccionada.mantenimiento || "";
-      nueva.equiposIntervenir = actividadSeleccionada.equipo || "";
-      nueva.ubicacionGeografica = actividadSeleccionada.subestacion || "";
-      nueva.cuadrillas = obtenerNombreCuadrilla(actividadSeleccionada);
-      nueva.equipo = actividadSeleccionada.equipo || "";
-      nueva.fechaPlaneada = obtenerFechaInput(actividadSeleccionada.fecha);
-      nueva.fechaCreada = fechaHoy();
-      nueva.descripcionActividades =
-        actividadSeleccionada.descripcion ||
-        actividadSeleccionada.nombre ||
-        actividadSeleccionada.actividad ||
-        "";
-      if (actividadSeleccionada.responsable) {
-        nueva.personalEjecutor = [
-          {
-            nombre: actividadSeleccionada.responsable,
-            cargo: "Ingeniero de Cuadrilla",
-            empresa: "CONTRATISTA",
-            cedula: "",
-            firma: "",
-          },
-        ];
+
+    const cargarDatos = async () => {
+      setCargandoOT(true);
+      // 🔹 Descargar la OT completa desde Supabase Storage
+      const otCompleta = await descargarOTCompleta(actividadId);
+      setCargandoOT(false);
+
+      if (otCompleta) {
+        setOt(fusionarConEstructura(otCompleta));
+        return;
       }
-    } else {
-      nueva.fechaEmision = fechaHoy();
-    }
-    setOt(nueva);
-  }, [actividadId, actividadSeleccionada]);
+
+      // Si no existe, crear una nueva
+      const nueva = obtenerEstructuraOTVacia();
+      if (actividadSeleccionada) {
+        nueva.fechaEmision = fechaHoy();
+        nueva.numeroOT = actividadSeleccionada.codigoOT || "";
+        nueva.actividad = actividadSeleccionada.tipo || "";
+        nueva.descripcionOT = "";
+        nueva.tipoMTTO = actividadSeleccionada.mantenimiento || "";
+        nueva.equiposIntervenir = actividadSeleccionada.equipo || "";
+        nueva.ubicacionGeografica = actividadSeleccionada.subestacion || "";
+        nueva.cuadrillas = obtenerNombreCuadrilla(actividadSeleccionada);
+        nueva.equipo = actividadSeleccionada.equipo || "";
+        nueva.fechaPlaneada = obtenerFechaInput(actividadSeleccionada.fecha);
+        nueva.fechaCreada = fechaHoy();
+        nueva.descripcionActividades =
+          actividadSeleccionada.descripcion ||
+          actividadSeleccionada.nombre ||
+          actividadSeleccionada.actividad ||
+          "";
+        if (actividadSeleccionada.responsable) {
+          nueva.personalEjecutor = [
+            {
+              nombre: actividadSeleccionada.responsable,
+              cargo: "Ingeniero de Cuadrilla",
+              empresa: "CONTRATISTA",
+              cedula: "",
+              firma: "",
+            },
+          ];
+        }
+      } else {
+        nueva.fechaEmision = fechaHoy();
+      }
+      setOt(nueva);
+    };
+
+    cargarDatos();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [actividadId, actividadSeleccionada?.id]);
 
   useEffect(() => {
     if (!autoPrint) return;
@@ -1781,11 +1796,12 @@ function OT() {
 
   const manejarFirmaPersonal = (index, file) => {
     if (!file) return;
-    const lector = new FileReader();
-    lector.onload = (e) => {
-      actualizarPersonalEjecutor(index, "firma", e.target?.result || "");
-    };
-    lector.readAsDataURL(file);
+
+    // 🔹 Firmas se comprimen distinto (PNG, 800px)
+    comprimirFirma(file).then((dataUrl) => {
+      if (!dataUrl) return;
+      actualizarPersonalEjecutor(index, "firma", dataUrl);
+    });
   };
 
   const eliminarFirmaPersonal = (index) =>
@@ -1819,19 +1835,25 @@ function OT() {
 
   const manejarFoto = (tipo, index, file) => {
     if (!file) return;
-    const lector = new FileReader();
-    lector.onload = (e) => {
-      const base64 = e.target?.result || "";
-      if (tipo === "diagrama") actualizarCampo("diagramaUnifilar", base64);
-      else if (tipo === "cierre") {
+
+    // 🔹 Comprimir antes de convertir a base64
+    comprimirImagen(file, {
+      maxAncho: 1600,
+      maxAlto: 1600,
+      calidad: 0.78,
+    }).then((base64) => {
+      if (!base64) return;
+
+      if (tipo === "diagrama") {
+        actualizarCampo("diagramaUnifilar", base64);
+      } else if (tipo === "cierre") {
         setOt((prev) => {
           const fotos = [...prev.fotosCierre];
           fotos[index] = base64;
           return { ...prev, fotosCierre: fotos };
         });
       }
-    };
-    lector.readAsDataURL(file);
+    });
   };
 
   const eliminarFoto = (tipo, index) => {
@@ -1845,9 +1867,10 @@ function OT() {
     }
   };
 
-  const guardarOTManual = () => {
+  const guardarOTManual = async () => {
     if (!actividadId) return;
-    const ok = guardarOTContext(actividadId, ot);
+    setMensajeGuardado("⏳ Guardando...");
+    const ok = await guardarOTContext(actividadId, ot);
     setMensajeGuardado(ok ? "✓ Guardado" : "✕ Error");
     setTimeout(() => setMensajeGuardado(""), 2500);
   };
@@ -1864,6 +1887,19 @@ function OT() {
   };
 
   const volverListado = () => navigate("/ot");
+
+  // 👈 NUEVO: Pantalla de carga
+  if (cargandoOT) {
+    return (
+      <div className="ot-hoja-wrapper">
+        <div className="ot-vacio-pantalla">
+          <div className="ot-vacio-pantalla-icono">⏳</div>
+          <h2>Cargando Orden de Trabajo...</h2>
+          <p>Descargando los datos desde el servidor.</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!actividadId) {
     // 🔒 Usuario cuadrilla: solo ve OTs de SUS actividades
@@ -2361,7 +2397,7 @@ function OT() {
                 onClick={() =>
                   document.getElementById("input-diagrama-unifilar")?.click()
                 }
-                style={{ minHeight: "55px", height: "55px" }}
+                style={{ minHeight: "180px", height: "180px" }}
               >
                 {ot.diagramaUnifilar ? (
                   <>
@@ -2878,14 +2914,19 @@ function OT() {
           <div className="ot-seccion-titulo">Documentos Soporte OT</div>
           <div className="ot-grid ot-grid-2">
             <div className="ot-campo-ot">
-              <span className="ot-campo-label">Número de Informe</span>
-              <input
-                type="text"
+              <span className="ot-campo-label">Número(s) de Informe</span>
+              <textarea
                 className="ot-campo-input"
+                style={{
+                  minHeight: "60px",
+                  height: "60px",
+                  resize: "vertical",
+                }}
                 value={ot.numeroInforme}
                 onChange={(e) =>
                   actualizarCampo("numeroInforme", e.target.value)
                 }
+                placeholder="Ej: INF-001, INF-002..."
               />
             </div>
             <div className="ot-campo-ot ot-campo-sin-borde-derecho">

@@ -6,6 +6,7 @@ import { cuadrillas as cuadrillasData } from "../data/cuadrillas";
 import { supabase } from "../lib/supabase";
 import "./Actividades.css";
 import { useAuth } from "../context/AuthContext";
+import { cargarCambiosManuales } from "../lib/configuracion";
 
 function Actividades() {
   const navigate = useNavigate();
@@ -30,6 +31,16 @@ function Actividades() {
   const [cuadrillaFiltro, setCuadrillaFiltro] = useState("");
   const [estadoFiltro, setEstadoFiltro] = useState("");
   const [materialesFiltro, setMaterialesFiltro] = useState("");
+
+  // =========================================
+  // CAMBIOS MANUALES
+  // =========================================
+
+  const [cambiosManualesDB, setCambiosManualesDB] = useState({});
+
+  useEffect(() => {
+    cargarCambiosManuales().then(setCambiosManualesDB);
+  }, []);
 
   // =========================================
   // DISPONIBILIDAD ACTUAL
@@ -231,20 +242,8 @@ function Actividades() {
       return null;
     }
 
-    let cambiosManuales = {};
-
-    try {
-      const guardados = localStorage.getItem("sigpas_cambios_manuales");
-
-      if (guardados) {
-        cambiosManuales = JSON.parse(guardados);
-      }
-    } catch (error) {
-      console.error(
-        "No se pudieron leer los cambios de disponibilidad.",
-        error,
-      );
-    }
+    // 🔹 FASE 5: Usar los datos cargados desde Supabase
+    const cambiosManuales = cambiosManualesDB;
 
     const claveSemana = `${anio}-${semana}`;
 
@@ -416,7 +415,7 @@ function Actividades() {
 
       window.removeEventListener("storage", actualizarDisponibilidad);
     };
-  }, []);
+  }, [cambiosManualesDB]); // 🔹 Dependencia agregada para recalcular si cambian los datos
 
   // =========================================
   // OBTENER INFORMACIÓN DE DISPONIBILIDAD
@@ -938,16 +937,11 @@ function Actividades() {
   // que usa el listado de OTs y la OT misma).
   // =========================================
 
-  const tieneInformeCreado = (actividadId) => {
-    if (!actividadId) {
-      return false;
-    }
-
-    // 🔹 FIX: consultamos la lista de informes traída de Supabase
-    // en lugar de leer localStorage (que ya no se usa).
-    return informesCreados.some(
+  const obtenerCantidadInformes = (actividadId) => {
+    if (!actividadId) return 0;
+    return informesCreados.filter(
       (informe) => String(informe.actividadId ?? "") === String(actividadId),
-    );
+    ).length;
   };
 
   const tieneOrdenTrabajoCreada = (actividadId) => {
@@ -965,14 +959,13 @@ function Actividades() {
   };
 
   const obtenerDocumentosActividad = (actividad) => {
-    const informe = tieneInformeCreado(actividad?.id);
-
+    const cantidadInformes = obtenerCantidadInformes(actividad?.id);
     const ordenTrabajo = tieneOrdenTrabajoCreada(actividad?.id);
 
     return {
-      informe,
+      cantidadInformes,
       ordenTrabajo,
-      completos: informe && ordenTrabajo,
+      completos: cantidadInformes > 0 && ordenTrabajo,
     };
   };
 
@@ -1494,17 +1487,19 @@ function Actividades() {
                       </span>
 
                       <span className="documento-opcion-contenido">
-                        <strong>Informe</strong>
+                        <strong>
+                          Informes{" "}
+                          {docs.cantidadInformes > 0
+                            ? `(${docs.cantidadInformes})`
+                            : ""}
+                        </strong>
 
                         <small>Crear o continuar informe</small>
                       </span>
 
-                      {docs.informe && (
-                        <span
-                          className="documento-opcion-check"
-                          aria-label="Informe creado"
-                        >
-                          ✓
+                      {docs.cantidadInformes > 0 && (
+                        <span className="documento-opcion-check">
+                          {docs.cantidadInformes}
                         </span>
                       )}
                     </button>

@@ -10,6 +10,7 @@ import {
 import { supabase } from "../lib/supabase";
 
 const ActividadesContext = createContext();
+const STORAGE_BUCKET = "sigpas-documentos";
 
 // =================================================
 // HELPERS
@@ -31,6 +32,47 @@ async function cargarTodoDesdeSupabase() {
   }
 
   return { actividades, ots };
+}
+
+// 👈 NUEVAS FUNCIONES DE STORAGE
+async function subirOTAStorage(actividadId, contenido) {
+  const path = `ots/${actividadId}/datos.json`;
+  const blob = new Blob([JSON.stringify(contenido, null, 2)], {
+    type: "application/json",
+  });
+
+  const { error } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .upload(path, blob, {
+      contentType: "application/json",
+      upsert: true,
+      cacheControl: "31536000",
+    });
+
+  if (error) throw error;
+}
+
+async function descargarOTDeStorage(actividadId) {
+  const path = `ots/${actividadId}/datos.json`;
+  const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(path);
+  const url = `${data.publicUrl}?t=${Date.now()}`;
+
+  try {
+    const response = await fetch(url, { cache: "no-store" });
+    if (!response.ok) return null;
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+async function eliminarOTDeStorage(actividadId) {
+  const path = `ots/${actividadId}/datos.json`;
+  try {
+    await supabase.storage.from(STORAGE_BUCKET).remove([path]);
+  } catch (error) {
+    console.warn("Error eliminando OT de Storage:", error);
+  }
 }
 
 // =================================================
@@ -65,7 +107,6 @@ export function ActividadesProvider({ children }) {
   // AGREGAR ACTIVIDAD
   // =================================================
   const agregarActividad = useCallback(async (actividad) => {
-    // Optimistic update
     setActividades((prev) => [...prev, actividad]);
 
     const { error } = await supabase.from("actividades").insert({
@@ -131,6 +172,7 @@ export function ActividadesProvider({ children }) {
       const [resAct, resOt] = await Promise.all([
         supabase.from("actividades").delete().eq("id", String(id)),
         supabase.from("ots").delete().eq("actividad_id", String(id)),
+        eliminarOTDeStorage(String(id)),
       ]);
 
       if (resAct.error || resOt.error) {
@@ -203,12 +245,38 @@ export function ActividadesProvider({ children }) {
   );
 
   // =================================================
-  // OBTENER OT POR ACTIVIDAD (lookup, sin red)
+  // OBTENER OT POR ACTIVIDAD (lookup rápido)
   // =================================================
   const obtenerOTPorActividad = useCallback(
     (actividadId) => {
       if (!actividadId) return null;
       return ots[String(actividadId)] || null;
+    },
+    [ots],
+  );
+
+  // =================================================
+  // DESCARGAR OT COMPLETA DE STORAGE (NUEVO)
+  // =================================================
+  const descargarOTCompleta = useCallback(
+    async (actividadId) => {
+      if (!actividadId) return null;
+
+      // 1. Intentar desde Storage
+      const deStorage = await descargarOTDeStorage(String(actividadId));
+      if (deStorage) return deStorage;
+
+      // 2. Fallback: buscar si aún está en el estado local (datos antiguos)
+      const deEstado = ots[String(actividadId)];
+      if (
+        deEstado &&
+        (deEstado.diagramaUnifilar !== undefined ||
+          deEstado.fotosCierre !== undefined ||
+          deEstado.personalEjecutor !== undefined)
+      ) {
+        return deEstado;
+      }
+      return null;
     },
     [ots],
   );
@@ -222,21 +290,39 @@ export function ActividadesProvider({ children }) {
 
       const key = String(actividadId);
       const anterior = ots[key] || null;
-      const nuevo = {
-        ...datosOT,
+
+      // 1. Extraer metadata ligera para el listado
+      const metadata = {
         actividadId: key,
+        numeroOT: datosOT.numeroOT || "",
+        estadoOT: datosOT.estadoOT || "Pendiente",
+        fechaEmision: datosOT.fechaEmision || "",
+        cuadrillas: datosOT.cuadrillas || "",
+        ubicacionGeografica: datosOT.ubicacionGeografica || "",
         actualizadaEn: new Date().toISOString(),
       };
 
-      setOts((prev) => ({ ...prev, [key]: nuevo }));
+      setOts((prev) => ({ ...prev, [key]: metadata }));
 
-      const { error } = await supabase.from("ots").upsert({
-        actividad_id: key,
-        datos: nuevo,
-        fecha_actualizacion: new Date().toISOString(),
-      });
+      try {
+        // 2. Subir JSON completo a Storage
+        await subirOTAStorage(key, {
+          ...datosOT,
+          actividadId: key,
+          actualizadaEn: metadata.actualizadaEn,
+        });
 
-      if (error) {
+        // 3. Guardar el índice (metadata) en la tabla Supabase
+        const { error } = await supabase.from("ots").upsert({
+          actividad_id: key,
+          datos: metadata,
+          fecha_actualizacion: new Date().toISOString(),
+        });
+
+        if (error) throw error;
+
+        return true;
+      } catch (error) {
         console.error("❌ Error al guardar OT:", error);
         setOts((prev) => {
           const copia = { ...prev };
@@ -246,7 +332,6 @@ export function ActividadesProvider({ children }) {
         });
         return false;
       }
-      return true;
     },
     [ots],
   );
@@ -267,19 +352,24 @@ export function ActividadesProvider({ children }) {
         return copia;
       });
 
-      const { error } = await supabase
-        .from("ots")
-        .delete()
-        .eq("actividad_id", key);
+      try {
+        await eliminarOTDeStorage(key);
 
-      if (error) {
+        const { error } = await supabase
+          .from("ots")
+          .delete()
+          .eq("actividad_id", key);
+
+        if (error) throw error;
+
+        return true;
+      } catch (error) {
         console.error("❌ Error al eliminar OT:", error);
         if (anterior) {
           setOts((prev) => ({ ...prev, [key]: anterior }));
         }
         return false;
       }
-      return true;
     },
     [ots],
   );
@@ -289,7 +379,6 @@ export function ActividadesProvider({ children }) {
   // =================================================
   const valorContexto = useMemo(
     () => ({
-      // Actividades
       actividades,
       setActividades,
       agregarActividad,
@@ -297,11 +386,10 @@ export function ActividadesProvider({ children }) {
       eliminarActividad,
       cambiarEstadoActividad,
       guardarMaterialesActividad,
-
-      // Órdenes de trabajo
       ots,
       setOts,
       obtenerOTPorActividad,
+      descargarOTCompleta,
       guardarOT,
       eliminarOT,
     }),
@@ -314,6 +402,7 @@ export function ActividadesProvider({ children }) {
       guardarMaterialesActividad,
       ots,
       obtenerOTPorActividad,
+      descargarOTCompleta,
       guardarOT,
       eliminarOT,
     ],

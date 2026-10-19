@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { comprimirImagen, comprimirFirma } from "../utils/imagenes";
 import { useSearchParams } from "react-router-dom";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
@@ -931,11 +932,9 @@ function ajustarAlturaPrimeraDescripcion(editor) {
    INFORME INICIAL
    ============================================================ */
 
-function crearInformeInicial(actividad = null) {
+function crearInformeInicial(actividad = null, cuadrillaOverride = null) {
   const ahora = new Date().toISOString();
 
-  // 👇 NUEVO: la cuadrilla puede venir forzada (usuario cuadrilla) o
-  //    deducirse de la actividad (flujo normal del admin).
   const cuadrillaId = cuadrillaOverride || actividad?.cuadrillaId || "";
 
   return {
@@ -943,7 +942,7 @@ function crearInformeInicial(actividad = null) {
 
     actividadId: actividad?.id ?? null,
 
-    cuadrillaId, // 👈 NUEVO: a nivel raíz, para que se guarde en metadatos.
+    cuadrillaId: cuadrillaId,
 
     numeroInforme: "",
 
@@ -1022,6 +1021,7 @@ function crearInformeInicial(actividad = null) {
       : null,
   };
 }
+
 /* ============================================================
    COMPONENTE
    ============================================================ */
@@ -1070,7 +1070,6 @@ function Informes() {
     actual: 0,
   });
 
-  // 🔹 Indicador de descarga de PDFs ya existentes (como en OTs).
   const [descargandoPdf, setDescargandoPdf] = useState(false);
   const [progresoDescargaPdf, setProgresoDescargaPdf] = useState({
     actual: 0,
@@ -1119,8 +1118,6 @@ function Informes() {
       try {
         let lista = await cargarInformesDesdeSupabase();
 
-        // 🔒 Usuario cuadrilla: solo ve informes de SU cuadrilla
-        //    El cuadrillaId vive dentro de metadatos (o en actividadSnapshot).
         if (esCuadrilla) {
           lista = lista.filter((inf) => {
             const cid =
@@ -1400,64 +1397,11 @@ function Informes() {
           (item) => String(item.id) === String(actividadId),
         );
 
-        if (actividad) {
-          const informeExistente = informes.find(
-            (informe) => String(informe.actividadId) === String(actividadId),
-          );
-
-          if (informeExistente) {
-            if (descargaEnCursoRef.current === informeExistente.id) {
-              return;
-            }
-
-            descargaEnCursoRef.current = informeExistente.id;
-            setCargandoInformeId(informeExistente.id);
-
-            try {
-              const contenidoCompleto = await descargarJsonDeStorage(
-                informeExistente.id,
-              );
-
-              if (cancelado) return;
-
-              const fusionado = {
-                ...contenidoCompleto,
-                __contenidoCargado: true,
-              };
-
-              setInformeActual(fusionado);
-              setMostrarFormulario(true);
-            } catch (error) {
-              console.error("Error descargando informe existente:", error);
-              if (!cancelado) {
-                window.alert(
-                  "No fue posible abrir el informe. Verifique su conexión.",
-                );
-              }
-            } finally {
-              descargaEnCursoRef.current = null;
-              if (!cancelado) setCargandoInformeId(null);
-            }
-            return;
-          }
-
-          if (actividadCreadaRef.current === actividadId) {
-            return;
-          }
-          actividadCreadaRef.current = actividadId;
-
-          const nuevo = {
-            ...crearInformeInicial(
-              actividad,
-              esCuadrilla ? cuadrillaUsuario : null, // 👈 NUEVO
-            ),
-            __contenidoCargado: true,
-          };
-          setInformeActual(nuevo);
-          setMostrarFormulario(true);
-          if (searchParams.get("informeId") !== nuevo.id) {
-            setSearchParams({ informeId: nuevo.id });
-          }
+        // 🔹 FIX: Agregamos && !mostrarFormulario para que no nos saque
+        // de la pantalla cuando estamos creando uno nuevo.
+        if (actividad && !informeId && !mostrarFormulario) {
+          setMostrarFormulario(false);
+          setInformeActual(null);
           return;
         }
       }
@@ -1489,6 +1433,7 @@ function Informes() {
     cargandoInformes,
     esCuadrilla,
     cuadrillaUsuario,
+    mostrarFormulario,
   ]);
 
   /* ============================================================
@@ -1562,18 +1507,11 @@ function Informes() {
 
   /* ============================================================
      AUTO-PAGINACIÓN DE LA HOJA FINAL (por chunks de líneas)
-     ============================================================
-     Cada textarea final (COMENTARIOS, ANEXOS, EQUIPOS) se divide
-     en sub-bloques de LINEAS_POR_CHUNK_FINAL líneas. Luego se
-     empaquetan por altura estimada en páginas de hoja Carta.
-     Así, si un textarea es muy largo, se reparte en varias
-     páginas con encabezado repetido.
      ============================================================ */
 
   const paginasBloquesFinales = useMemo(() => {
     if (!informeActual) return [[]];
 
-    // 1) Aplanar todo en sub-bloques.
     const subBloques = [];
 
     BLOQUES_FINALES_INFO.forEach((bloque) => {
@@ -1605,7 +1543,6 @@ function Informes() {
       }
     });
 
-    // 2) Empaquetar sub-bloques en páginas por altura estimada.
     const ALTO_DISPONIBLE = 700;
 
     const calcularAlto = (sub) => {
@@ -1715,7 +1652,7 @@ function Informes() {
   ]);
 
   /* ============================================================
-     ACTUALIZAR CAMPO
+     ACTUALIZAR CAMPOS
      ============================================================ */
 
   function actualizarCampo(campo, valor) {
@@ -1739,7 +1676,6 @@ function Informes() {
       }
 
       const personalActual = [...(actual.personalEjecutor || ["", "", ""])];
-
       personalActual[indice] = valor;
 
       return {
@@ -1757,7 +1693,6 @@ function Informes() {
       }
 
       const cedulasActuales = [...(actual.cedulas || ["", "", ""])];
-
       cedulasActuales[indice] = valor;
 
       return {
@@ -1771,21 +1706,25 @@ function Informes() {
   function actualizarFirmaDigital(indice, event) {
     const archivo = Array.from(event.target.files || [])[0];
     if (!archivo || !archivo.type.startsWith("image/")) return;
-    const lector = new FileReader();
-    lector.onload = () => {
-      if (typeof lector.result !== "string") return;
+
+    comprimirFirma(archivo).then((dataUrl) => {
+      if (typeof dataUrl !== "string") {
+        event.target.value = "";
+        return;
+      }
+
       setInformeActual((actual) => {
         if (!actual) return actual;
         const firmas = [...(actual.firmasDigitales || ["", "", ""])];
-        firmas[indice] = lector.result;
+        firmas[indice] = dataUrl;
         return {
           ...actual,
           firmasDigitales: firmas,
           fechaActualizacion: new Date().toISOString(),
         };
       });
-    };
-    lector.readAsDataURL(archivo);
+    });
+
     event.target.value = "";
   }
 
@@ -1948,27 +1887,20 @@ function Informes() {
       return;
     }
 
-    const lector = new FileReader();
-    lector.onload = () => {
-      const src = lector.result;
-
+    comprimirImagen(archivo).then((src) => {
       if (typeof src !== "string") {
+        event.target.value = "";
         return;
       }
 
       setInformeActual((actual) => {
-        if (!actual) {
-          return actual;
-        }
+        if (!actual) return actual;
 
         const registro = actual.registroFotografico?.length
           ? [...actual.registroFotografico]
           : crearEspaciosFotograficosIniciales();
 
-        registro[indice] = {
-          ...registro[indice],
-          src,
-        };
+        registro[indice] = { ...registro[indice], src };
 
         return {
           ...actual,
@@ -1976,8 +1908,8 @@ function Informes() {
           fechaActualizacion: new Date().toISOString(),
         };
       });
-    };
-    lector.readAsDataURL(archivo);
+    });
+
     event.target.value = "";
   }
 
@@ -2435,14 +2367,8 @@ function Informes() {
         return;
       }
 
-      const lector = new FileReader();
-
-      lector.onload = () => {
-        const src = lector.result;
-
-        if (!src) {
-          return;
-        }
+      comprimirImagen(archivo).then((src) => {
+        if (!src) return;
 
         editor.focus();
 
@@ -2492,10 +2418,6 @@ function Informes() {
         imagen.style.margin = "10px auto";
         imagen.style.maxWidth = "100%";
 
-        const salto = document.createElement("div");
-
-        salto.innerHTML = "<br />";
-
         rango.deleteContents();
         rango.insertNode(imagen);
 
@@ -2515,9 +2437,7 @@ function Informes() {
 
         setImagenSeleccionada(false);
         imagenSeleccionadaRef.current = null;
-      };
-
-      lector.readAsDataURL(archivo);
+      });
     });
 
     event.target.value = "";
@@ -2610,28 +2530,6 @@ function Informes() {
     });
   }
 
-  /* ============================================================
-     NUEVO INFORME
-     ============================================================ */
-
-  function nuevoInforme() {
-    const nuevo = {
-      ...crearInformeInicial(
-        null,
-        esCuadrilla ? cuadrillaUsuario : null, // 👈 NUEVO
-      ),
-      __contenidoCargado: true,
-    };
-
-    ultimoInformeEditorRef.current = null;
-
-    setInformeActual(nuevo);
-    setMostrarFormulario(true);
-
-    setSearchParams({
-      informeId: nuevo.id,
-    });
-  }
   /* ============================================================
      ABRIR INFORME
      ============================================================ */
@@ -2758,6 +2656,9 @@ function Informes() {
       setInformeActual({ ...actualizado, __contenidoCargado: true });
 
       alert("Informe guardado correctamente.");
+      if (actividadId) {
+        setSearchParams({ actividadId, informeId: actualizado.id });
+      }
     } catch (error) {
       console.error("Error guardando informe:", error);
       alert(
@@ -2882,9 +2783,6 @@ function Informes() {
         }
       }
 
-      // =====================================================
-      // 1) Informes CON PDF → descarga directa (con progreso)
-      // =====================================================
       for (let i = 0; i < conPdf.length; i++) {
         const informe = conPdf[i];
 
@@ -2911,9 +2809,6 @@ function Informes() {
         }
       }
 
-      // =====================================================
-      // 2) Informes SIN PDF → activar modo "generar en el momento"
-      // =====================================================
       if (sinPdf.length > 0) {
         setGenerandoPdfLote({
           activo: true,
@@ -2956,7 +2851,157 @@ function Informes() {
     actividadCreadaRef.current = null;
     setSearchParams({});
   }
+  /* ============================================================
+     RENDER — VISTA INTERMEDIA (INFORMES DE UNA ACTIVIDAD)
+     ============================================================ */
 
+  /* ============================================================
+     RENDER — VISTA INTERMEDIA (INFORMES DE UNA ACTIVIDAD)
+     ============================================================ */
+
+  if (actividadId && !informeId && !mostrarFormulario) {
+    const actividadActual = actividades.find(
+      (a) => String(a.id) === String(actividadId),
+    );
+    const informesDeActividad = informes.filter(
+      (inf) => String(inf.actividadId) === String(actividadId),
+    );
+
+    const crearNuevoParaActividad = () => {
+      const nuevo = {
+        ...crearInformeInicial(
+          actividadActual,
+          esCuadrilla ? cuadrillaUsuario : null,
+        ),
+        __contenidoCargado: true,
+      };
+      setInformeActual(nuevo);
+      setMostrarFormulario(true);
+    };
+
+    return (
+      <div className="informes-contenedor">
+        {/* ENCABEZADO */}
+        <div
+          className="informes-pagina-header"
+          style={{ marginBottom: "20px" }}
+        >
+          <div>
+            <span className="informes-editor-etiqueta">SIGPAS</span>
+            <h1>Informes de la Actividad</h1>
+          </div>
+          <button
+            type="button"
+            className="btn-volver-actividades"
+            onClick={() => setSearchParams({})}
+          >
+            ← Volver a la lista general
+          </button>
+        </div>
+
+        {/* TARJETA DE INFORMACIÓN DE LA ACTIVIDAD */}
+        {actividadActual && (
+          <div className="actividad-info-card">
+            <span className="actividad-info-titulo">
+              Información de la Actividad
+            </span>
+            <div className="actividad-info-grid">
+              <div className="actividad-info-item">
+                <span>Actividad</span>
+                <strong>
+                  {actividadActual.nombre || actividadActual.actividad}
+                </strong>
+              </div>
+              <div className="actividad-info-item">
+                <span>Subestación</span>
+                <strong>{actividadActual.subestacion || "—"}</strong>
+              </div>
+              <div className="actividad-info-item">
+                <span>Fecha de Programación</span>
+                <strong>{formatearFecha(actividadActual.fecha)}</strong>
+              </div>
+              {actividadActual.descripcion && (
+                <div className="actividad-info-descripcion">
+                  <strong>Descripción:</strong> {actividadActual.descripcion}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* LISTA DE INFORMES */}
+        <div className="informes-tabla-contenedor">
+          <div className="seccion-informes-header">
+            <h3 style={{ margin: 0, fontSize: "16px", color: "#1f2937" }}>
+              Informes registrados ({informesDeActividad.length})
+            </h3>
+            <button
+              type="button"
+              onClick={crearNuevoParaActividad}
+              className="btn-crear-informe-actividad"
+            >
+              + Crear nuevo informe para esta actividad
+            </button>
+          </div>
+
+          {informesDeActividad.length === 0 ? (
+            <div
+              style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}
+            >
+              <div style={{ fontSize: "24px", marginBottom: "10px" }}>📄</div>
+              <h4 style={{ margin: "0 0 8px", color: "#374151" }}>
+                Aún no hay informes creados
+              </h4>
+              <p style={{ margin: 0, fontSize: "13px" }}>
+                Haz clic en el botón verde de arriba para generar el primer
+                informe de esta actividad.
+              </p>
+            </div>
+          ) : (
+            <table className="informes-tabla">
+              <thead>
+                <tr>
+                  <th>Informe</th>
+                  <th>Fecha</th>
+                  <th>Estado</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {informesDeActividad.map((inf) => (
+                  <tr key={inf.id}>
+                    <td>
+                      <strong>{inf.numeroInforme || "Sin asignar"}</strong>
+                    </td>
+                    <td>{formatearFecha(inf.fechaCreacion)}</td>
+                    <td>
+                      <span
+                        className={`informe-semana-badge`}
+                        style={{ background: "#eef2ff", color: "#2648af" }}
+                      >
+                        {inf.estado || "Borrador"}
+                      </span>
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className="btn-tabla"
+                        onClick={() =>
+                          setSearchParams({ actividadId, informeId: inf.id })
+                        }
+                      >
+                        Abrir informe
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    );
+  }
   /* ============================================================
      RENDER — EDITOR
      ============================================================ */
@@ -3018,7 +3063,6 @@ function Informes() {
       ESPACIOS_FOTOGRAFICOS_POR_HOJA,
     );
 
-    // 🔹 Encabezado reutilizable para todas las páginas finales.
     const renderEncabezadoFinal = (numeroPagina) => (
       <table className="informe-encabezado">
         <tbody>
@@ -3899,9 +3943,6 @@ function Informes() {
                         {renderEncabezadoFinal(numeroPaginaFinal)}
 
                         {subBloques.map((sub) => {
-                          // ==========================================
-                          // CHUNK DE TEXTO (COMENTARIOS / ANEXOS / EQUIPOS)
-                          // ==========================================
                           if (sub.tipo === "texto") {
                             const esContinuacion = sub.chunkIndex > 0;
 
@@ -3943,9 +3984,6 @@ function Informes() {
                             );
                           }
 
-                          // ==========================================
-                          // TABLA DE TIEMPOS
-                          // ==========================================
                           if (sub.tipo === "tiempos") {
                             return (
                               <section
@@ -4017,7 +4055,7 @@ function Informes() {
   }
 
   /* ============================================================
-     RENDER — LISTADO
+     RENDER — LISTADO GENERAL
      ============================================================ */
 
   return (
@@ -4025,23 +4063,13 @@ function Informes() {
       <div className="informes-pagina-header">
         <div>
           <span className="informes-editor-etiqueta">SIGPAS</span>
-
           <h1>Informes</h1>
         </div>
-
-        <button
-          type="button"
-          className="btn-nuevo-informe btn-nuevo-informe-header"
-          onClick={nuevoInforme}
-        >
-          + Nuevo informe
-        </button>
       </div>
 
       <div className="informes-filtros">
         <div className="campo-filtro campo-busqueda">
           <label>Buscar</label>
-
           <input
             type="text"
             value={busqueda}
@@ -4052,13 +4080,11 @@ function Informes() {
 
         <div className="campo-filtro campo-anio">
           <label>Año</label>
-
           <select
             value={filtroAnio}
             onChange={(e) => setFiltroAnio(e.target.value)}
           >
             <option value="Todos">Todos</option>
-
             {aniosDisponibles.map((anio) => (
               <option value={anio} key={anio}>
                 {anio}
@@ -4069,7 +4095,6 @@ function Informes() {
 
         <div className="campo-filtro campo-mes">
           <label>Mes</label>
-
           <select
             value={filtroMes}
             onChange={(e) =>
@@ -4079,7 +4104,6 @@ function Informes() {
             }
           >
             <option value="Todos">Todos</option>
-
             {MESES.slice(1).map((mes, indice) => (
               <option value={indice + 1} key={mes}>
                 {mes}
@@ -4090,13 +4114,11 @@ function Informes() {
 
         <div className="campo-filtro campo-semana">
           <label>Semana</label>
-
           <select
             value={filtroSemana}
             onChange={(e) => setFiltroSemana(e.target.value)}
           >
             <option value="Todos">Todas</option>
-
             {semanasDisponibles.map((semana) => (
               <option value={semana} key={semana}>
                 Semana {semana}
@@ -4115,13 +4137,11 @@ function Informes() {
 
         <div className="campo-filtro campo-subestacion">
           <label>Subestación</label>
-
           <select
             value={filtroSubestacion}
             onChange={(e) => setFiltroSubestacion(e.target.value)}
           >
             <option value="Todas">Todas</option>
-
             {subestacionesDisponibles.map((subestacion) => (
               <option value={subestacion} key={subestacion}>
                 {subestacion}
@@ -4132,13 +4152,11 @@ function Informes() {
 
         <div className="campo-filtro campo-cuadrilla">
           <label>Cuadrilla</label>
-
           <select
             value={filtroCuadrilla}
             onChange={(e) => setFiltroCuadrilla(e.target.value)}
           >
             <option value="Todas">Todas</option>
-
             {cuadrillas
               .filter((cuadrilla) => cuadrilla.activa)
               .map((cuadrilla) => (
@@ -4185,18 +4203,8 @@ function Informes() {
         ) : informesFiltrados.length === 0 ? (
           <div className="informes-tabla-vacia">
             <div className="informes-vacio-icono">—</div>
-
             <h3>No hay informes registrados</h3>
-
-            <p>Cree un nuevo informe para comenzar.</p>
-
-            <button
-              type="button"
-              onClick={nuevoInforme}
-              className="btn-nuevo-informe"
-            >
-              + Nuevo informe
-            </button>
+            <p>Vaya a la sección de Actividades para crear uno nuevo.</p>
           </div>
         ) : (
           <table className="informes-tabla">

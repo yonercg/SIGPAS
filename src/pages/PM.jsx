@@ -210,9 +210,7 @@ function PM() {
     semanaReprogramada: "",
   });
 
-  // 🔹 NUEVO: búsqueda por texto libre
   const [busqueda, setBusqueda] = useState("");
-
   const [filtroAnio, setFiltroAnio] = useState("Todos");
   const [filtroSemana, setFiltroSemana] = useState("Todas");
   const [filtroEstado, setFiltroEstado] = useState("Todos");
@@ -484,7 +482,6 @@ function PM() {
     if (valor instanceof Date) return valor;
 
     if (typeof valor === "string") {
-      // 🔹 FIX: Formato ISO "YYYY-MM-DD" → parsear como LOCAL, no UTC.
       const matchISO = valor.match(/^(\d{4})-(\d{2})-(\d{2})/);
       if (matchISO) {
         const anio = Number(matchISO[1]);
@@ -494,7 +491,6 @@ function PM() {
         if (!Number.isNaN(fechaLocal.getTime())) return fechaLocal;
       }
 
-      // Formato "DD/MM/YYYY" (por si llega algún dato heredado)
       const partes = valor.split("/");
       if (partes.length === 3) {
         const dia = Number(partes[0]);
@@ -505,7 +501,6 @@ function PM() {
       }
     }
 
-    // Fallback (raro, pero por seguridad)
     const fecha = new Date(valor);
     return Number.isNaN(fecha.getTime()) ? null : fecha;
   };
@@ -606,34 +601,50 @@ function PM() {
   };
 
   // =================================================
-  // OBTENER INFORMACIÓN DEL INFORME VINCULADO A LA PM
+  // OBTENER INFORMES VINCULADOS A LA PM
+  // (Ahora devuelve TODOS los informes asociados)
   // =================================================
 
-  const obtenerInformeDePM = (actividadPM) => {
-    const actividadProg = obtenerActividadProgramacion(actividadPM);
-    if (!actividadProg) return null;
+  const obtenerInformesDePM = (actividadPM) => {
+    if (!actividadPM || !Array.isArray(actividades)) return [];
 
-    const meta = informesPorActividad.get(String(actividadProg.id));
-    if (!meta) return null;
+    const pmId = normalizarPMId(actividadPM.pmId);
+    if (!pmId) return [];
 
-    const cuadrillaId =
-      meta.cuadrillaId || meta.actividadSnapshot?.cuadrillaId || "";
+    // Buscar TODAS las actividades programadas que comparten este pmId
+    const actividadesProg = actividades.filter(
+      (actividad) => actividad && normalizarPMId(actividad.pmId) === pmId,
+    );
 
-    const cuadrillaNombre =
-      cuadrillasData.find((c) => c.id === cuadrillaId)?.nombre ||
-      cuadrillaId ||
-      "—";
+    const informes = [];
 
-    return {
-      id: meta.id,
-      numeroInforme: meta.numeroInforme || "Sin N°",
-      fecha: meta.fechaCreacion || meta.fechaInicio || "",
-      cuadrillaId,
-      cuadrillaNombre,
-      responsable: meta.actividadSnapshot?.responsable || "",
-      subestacion:
-        meta.subestacion || meta.actividadSnapshot?.subestacion || "",
-    };
+    // Mapear cada actividad a su informe si existe
+    actividadesProg.forEach((actProg) => {
+      const meta = informesPorActividad.get(String(actProg.id));
+      if (meta) {
+        const cuadrillaId =
+          meta.cuadrillaId || meta.actividadSnapshot?.cuadrillaId || "";
+
+        const cuadrillaNombre =
+          cuadrillasData.find((c) => c.id === cuadrillaId)?.nombre ||
+          cuadrillaId ||
+          "—";
+
+        informes.push({
+          id: meta.id,
+          numeroInforme: meta.numeroInforme || "Sin N°",
+          fecha: meta.fechaCreacion || meta.fechaInicio || "",
+          cuadrillaId,
+          cuadrillaNombre,
+          responsable: meta.actividadSnapshot?.responsable || "",
+          subestacion:
+            meta.subestacion || meta.actividadSnapshot?.subestacion || "",
+        });
+      }
+    });
+
+    // Ordenar por fecha descendente (el más reciente primero)
+    return informes.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
   };
 
   // =================================================
@@ -830,7 +841,6 @@ function PM() {
   // =================================================
 
   const actividadesFiltradas = actividadesPM.filter((actividad) => {
-    // 🔹 Búsqueda por texto libre: subestación, zona, tipo, NT, PM ID, detalles
     const texto = busqueda.trim().toLowerCase();
 
     const coincideBusqueda =
@@ -919,7 +929,6 @@ function PM() {
 
           <div className="pm-header-controles">
             <div className="pm-filtros">
-              {/* 🔹 NUEVO: Búsqueda por texto */}
               <div className="pm-filtro pm-filtro-busqueda">
                 <label htmlFor="busquedaPM">Buscar</label>
                 <input
@@ -1202,7 +1211,8 @@ function PM() {
                   actividadesFiltradas.map((actividad) => {
                     const estadoActual = obtenerEstadoPM(actividad);
                     const semanaProgramada = obtenerSemanaProgramada(actividad);
-                    const informeVinculado = obtenerInformeDePM(actividad);
+                    const informesVinculados = obtenerInformesDePM(actividad);
+                    const tieneInformes = informesVinculados.length > 0;
 
                     return (
                       <tr key={actividad.id}>
@@ -1237,18 +1247,16 @@ function PM() {
                             className={`pm-btn-detalles ${
                               actividad.detalles ? "pm-btn-detalles-activo" : ""
                             } ${
-                              informeVinculado
-                                ? "pm-btn-detalles-con-informe"
-                                : ""
+                              tieneInformes ? "pm-btn-detalles-con-informe" : ""
                             }`}
                             onClick={() => abrirDetalles(actividad)}
                             title={
-                              informeVinculado
-                                ? `Ver detalles · Informe ${informeVinculado.numeroInforme} vinculado`
+                              tieneInformes
+                                ? `Ver detalles · ${informesVinculados.length} informe(s) vinculado(s)`
                                 : "Ver detalles"
                             }
                           >
-                            {informeVinculado && (
+                            {tieneInformes && (
                               <span
                                 className="pm-btn-detalles-indicador"
                                 aria-hidden="true"
@@ -1334,49 +1342,47 @@ function PM() {
 
             {actividadDetalles &&
               (() => {
-                const informe = obtenerInformeDePM(actividadDetalles);
-                if (!informe) return null;
+                const informes = obtenerInformesDePM(actividadDetalles);
+                if (informes.length === 0) return null;
 
                 return (
                   <div className="pm-informe-detalle">
                     <div className="pm-informe-detalle-titulo">
-                      Informe vinculado
+                      Informes vinculados ({informes.length})
                     </div>
-                    <div className="pm-informe-detalle-grid">
-                      <div>
-                        <span>N° de informe</span>
-                        <strong
-                          className="pm-informe-detalle-link"
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => abrirInformeVinculado(informe.id)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" || e.key === " ") {
-                              e.preventDefault();
-                              abrirInformeVinculado(informe.id);
-                            }
-                          }}
-                          title="Abrir informe"
-                        >
-                          {informe.numeroInforme} →
-                        </strong>
-                      </div>
-                      <div>
-                        <span>Fecha</span>
-                        <strong>{formatearFechaCorta(informe.fecha)}</strong>
-                      </div>
-                      <div>
-                        <span>Cuadrilla</span>
-                        <strong>{informe.cuadrillaNombre}</strong>
-                      </div>
-                      <div>
-                        <span>Responsable</span>
-                        <strong>{informe.responsable || "—"}</strong>
-                      </div>
-                      <div>
-                        <span>Subestación</span>
-                        <strong>{informe.subestacion || "—"}</strong>
-                      </div>
+                    <div className="pm-informe-lista">
+                      {informes.map((informe) => (
+                        <div key={informe.id} className="pm-informe-item">
+                          <div className="pm-informe-item-header">
+                            <strong
+                              className="pm-informe-detalle-link"
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => abrirInformeVinculado(informe.id)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  e.preventDefault();
+                                  abrirInformeVinculado(informe.id);
+                                }
+                              }}
+                              title="Abrir informe"
+                            >
+                              {informe.numeroInforme} →
+                            </strong>
+                            <span className="pm-informe-item-fecha">
+                              {formatearFechaCorta(informe.fecha)}
+                            </span>
+                          </div>
+                          <div className="pm-informe-item-body">
+                            <span className="pm-informe-item-cuadrilla">
+                              {informe.cuadrillaNombre}
+                            </span>
+                            <span className="pm-informe-item-resp">
+                              {informe.responsable || "Sin responsable"}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 );
