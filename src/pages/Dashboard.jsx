@@ -889,36 +889,59 @@ function Dashboard() {
     });
 
     /* ---------------------------------------------------- */
-    /* 2) EJECUTADAS: por FECHA REAL de ejecución */
+    /* 2) EJECUTADAS: Evaluando regla de trimestres         */
     /* ---------------------------------------------------- */
 
     actividadesPM.forEach((pmAct) => {
       const pmIdNorm = normalizarPMId(pmAct.pmId);
-
       if (!pmIdNorm) return;
 
       const progAct = actividadesPorPmId.get(pmIdNorm);
-
       if (!progAct) return;
 
       const estadoProg = normalizarTexto(progAct.estado);
-
       const esEjecutada =
         estadoProg === "ejecutada" || estadoProg === "ejecutado reprogramado";
-
       if (!esEjecutada) return;
 
-      // La fecha `fecha` de la actividad de Programación es la fecha
-      // actual (se actualiza al reprogramar). Es la que define el
-      // trimestre real de ejecución.
+      // 1. Fecha de PLANIFICACIÓN ORIGINAL (ignoramos la semanaReprogramada)
+      const anioOriginal = Number(pmAct.anio) || new Date().getFullYear();
+      const semanaOriginal = Number(pmAct.semana);
+
+      if (!semanaOriginal) return; // Si no tiene semana original, no podemos evaluar
+
+      const fechaPlanificada = obtenerFechaSemanaISO(
+        anioOriginal,
+        semanaOriginal,
+      );
+
+      // 2. Fecha REAL en la que se ejecutó
       const fechaEjecucion = obtenerFecha({ fecha: progAct.fecha });
 
-      if (!coincideConPeriodo(fechaEjecucion)) return;
+      let fechaParaEvaluar = fechaPlanificada;
+
+      if (fechaEjecucion && fechaPlanificada) {
+        const anioPlan = fechaPlanificada.getFullYear();
+        const trimPlan = Math.ceil((fechaPlanificada.getMonth() + 1) / 3);
+
+        const anioEjec = fechaEjecucion.getFullYear();
+        const trimEjec = Math.ceil((fechaEjecucion.getMonth() + 1) / 3);
+
+        // REGLA: Si se ejecutó en un trimestre POSTERIOR al planificado, la ejecución
+        // se traslada al trimestre donde realmente se hizo.
+        const esPosteriorTrimestre =
+          anioEjec > anioPlan || (anioEjec === anioPlan && trimEjec > trimPlan);
+
+        if (esPosteriorTrimestre) {
+          fechaParaEvaluar = fechaEjecucion;
+        }
+        // Si se ejecutó antes o en el mismo trimestre, fechaParaEvaluar se queda con la fechaPlanificada.
+      }
+
+      if (!coincideConPeriodo(fechaParaEvaluar)) return;
 
       const tipoNormalizado = normalizarTipoPM(pmAct.tipo);
-
       const datos = contadores[tipoNormalizado];
-
       if (!datos) return;
 
       datos.ejecutadas += 1;
@@ -927,7 +950,6 @@ function Dashboard() {
       if (tiposGrupo50Normalizados.has(tipoNormalizado)) {
         ejecutadasGrupo50 += 1;
       }
-
       if (tipoNormalizado === claveConsignasPM) {
         ejecutadasConsignas += 1;
       }

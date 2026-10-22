@@ -2675,3 +2675,50 @@ textarea.ot-textarea-inline {
 .ot-lista-tabla .ot-lista-semana-badge {
   display: inline-flex;
 }
+/* =========================================================
+   FIX PARA MÓVILES: Texto invisible en OTs vacías
+   ========================================================= */
+
+/* 1. Forzar fondo blanco y texto negro en el contenedor principal */
+.ot-hoja {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+}
+
+/* 2. Forzar texto negro en todos los campos, textos y tablas de la OT */
+.ot-hoja input,
+.ot-hoja textarea,
+.ot-hoja select,
+.ot-hoja span,
+.ot-hoja div,
+.ot-hoja td,
+.ot-hoja th,
+.ot-hoja label,
+.ot-hoja strong,
+.ot-hoja small {
+  color: #000000 !important;
+  -webkit-text-fill-color: #000000 !important; /* Parche para Safari/iOS */
+}
+
+/* 3. Asegurar que el fondo de los inputs sea blanco (no transparente) */
+.ot-hoja input,
+.ot-hoja textarea,
+.ot-hoja select {
+  background-color: #ffffff !important;
+}
+
+/* 4. Arreglar el color de los Placeholders (el texto de ejemplo como "xxxxxx") */
+.ot-hoja input::placeholder,
+.ot-hoja textarea::placeholder {
+  color: #6b7280 !important; /* Un gris visible */
+  opacity: 1 !important;
+}
+
+/* 5. Arreglar el texto de las horas en las tablas */
+.ot-celda-total,
+.ot-celda-total-inline,
+.ot-input-hora,
+.ot-input-num {
+  color: #000000 !important;
+  -webkit-text-fill-color: #000000 !important;
+}

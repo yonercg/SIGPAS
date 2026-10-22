@@ -611,7 +611,7 @@ async function generarPdfBlob(contenedor) {
 
     const canvas = await html2canvas(hoja, {
       backgroundColor: "#ffffff",
-      scale: 2,
+      scale: 1.5,
       useCORS: false,
       allowTaint: true,
       logging: false,
@@ -706,8 +706,8 @@ async function generarPdfBlob(contenedor) {
       pdf.addPage("letter", "portrait");
     }
     pdf.addImage(
-      lienzoFinal.toDataURL("image/png"),
-      "PNG",
+      lienzoFinal.toDataURL("image/png, 0.75"),
+      "JPEG",
       (anchoPagina - anchoImagen) / 2,
       (altoPagina - altoImagen) / 2,
       anchoImagen,
