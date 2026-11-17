@@ -15,6 +15,7 @@ import { supabase } from "../lib/supabase";
 import { cuadrillas } from "../data/cuadrillas";
 import "./Informes.css";
 import { useAuth } from "../context/AuthContext";
+import { registrarAuditoria } from "../lib/auditoria";
 
 const FILAS_ANOMALIAS_POR_HOJA = 6;
 const ESPACIOS_FOTOGRAFICOS_POR_HOJA = 4;
@@ -445,6 +446,59 @@ async function subirJsonAStorage(informeId, contenido) {
   return path;
 }
 
+// 🆕 Función para convertir base64 a Blob
+function base64ToBlob(base64) {
+  const partes = base64.split(",");
+  const mime = partes[0].match(/:(.*?);/)[1];
+  const bstr = atob(partes[1]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+  while (n--) {
+    u8arr[n] = bstr.charCodeAt(n);
+  }
+  return new Blob([u8arr], { type: mime });
+}
+
+// 🆕 Función para subir una imagen en base64 y devolver su URL
+async function subirImagenBase64AStorage(informeId, base64, nombreArchivo) {
+  // Si ya es una URL (http), no hacemos nada y la devolvemos tal cual
+  if (!base64 || base64.startsWith("http")) return base64;
+
+  const blob = base64ToBlob(base64);
+  const extension = blob.type.split("/")[1] || "jpg";
+  const path = `informes/${informeId}/imagenes/${nombreArchivo}.${extension}`;
+
+  const { error } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .upload(path, blob, { upsert: true, cacheControl: "31536000" });
+
+  if (error) throw error;
+
+  const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(path);
+  return data.publicUrl;
+}
+
+// 🆕 Función para extraer imágenes del HTML, subirlas y reemplazar por URLs
+async function procesarHtmlYSubirImagenes(informeId, html) {
+  if (!html || !html.includes("<img")) return html;
+
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, "text/html");
+  const imagenes = Array.from(doc.querySelectorAll("img"));
+
+  let index = 0;
+  for (const img of imagenes) {
+    const src = img.getAttribute("src");
+    if (src && src.startsWith("data:image")) {
+      const nombre = `html_img_${Date.now()}_${index}`;
+      const url = await subirImagenBase64AStorage(informeId, src, nombre);
+      img.setAttribute("src", url);
+      index++;
+    }
+  }
+  return doc.body.innerHTML;
+}
+
 async function subirPdfAStorage(informeId, pdfBlob) {
   const path = `informes/${informeId}/informe.pdf`;
 
@@ -553,10 +607,22 @@ async function generarPdfBlob(contenedor) {
 
   const imagenes = Array.from(contenedor.querySelectorAll("img"));
 
+  // 🆕 1. Forzar CORS en todas las imágenes antes de renderizar
   await Promise.all(
     imagenes.map(
       (img) =>
         new Promise((resolver) => {
+          // Si la imagen viene de una URL externa (Supabase), le decimos al navegador
+          // que solicite permisos CORS para poder exportar el canvas sin problemas.
+          if (img.src && !img.src.startsWith("data:") && !img.crossOrigin) {
+            img.crossOrigin = "anonymous";
+
+            // Forzamos una recarga de la imagen para que aplique el crossOrigin
+            const srcOriginal = img.src;
+            img.src = "";
+            img.src = srcOriginal;
+          }
+
           if (img.complete && img.naturalWidth > 0) {
             resolver();
             return;
@@ -570,12 +636,6 @@ async function generarPdfBlob(contenedor) {
 
           img.addEventListener("load", finalizar, { once: true });
           img.addEventListener("error", finalizar, { once: true });
-
-          if (img.src && !img.complete) {
-            const srcOriginal = img.src;
-            img.src = "";
-            img.src = srcOriginal;
-          }
         }),
     ),
   );
@@ -609,14 +669,16 @@ async function generarPdfBlob(contenedor) {
     const textareasOriginales = Array.from(hoja.querySelectorAll("textarea"));
     const textareasValores = textareasOriginales.map((el) => el.value || "");
 
+    // 🆕 2. Configuración correcta para evitar el error de "Canvas contaminado"
     const canvas = await html2canvas(hoja, {
       backgroundColor: "#ffffff",
-      scale: 1.5,
-      useCORS: false,
-      allowTaint: true,
+      scale: 1.3,
+      useCORS: true, // ✅ Permite cargar imágenes de otros dominios
+      allowTaint: false, // ✅ Evita que el lienzo se contamine
       logging: false,
       onclone: (documentoClonado) => {
         try {
+          // 1. Ocultar botones de acción
           documentoClonado
             .querySelectorAll(
               ".btn-eliminar-foto, .btn-eliminar-imagen-editor, .registro-fotografico-cargar, .cargar-firma-digital",
@@ -625,6 +687,7 @@ async function generarPdfBlob(contenedor) {
               elemento.style.display = "none";
             });
 
+          // 2. Manejar contenteditable (Descripción)
           documentoClonado
             .querySelectorAll("[contenteditable]")
             .forEach((clonEl, i) => {
@@ -638,6 +701,7 @@ async function generarPdfBlob(contenedor) {
               clonEl.removeAttribute("contenteditable");
             });
 
+          // 3. Reemplazar textareas por divs
           documentoClonado
             .querySelectorAll("textarea")
             .forEach((clonTextarea, i) => {
@@ -648,6 +712,7 @@ async function generarPdfBlob(contenedor) {
                 const div = documentoClonado.createElement("div");
                 div.textContent = valor;
 
+                // Copiar estilos normales
                 div.style.width = estilo.width;
                 div.style.minHeight = estilo.minHeight;
                 div.style.height = "auto";
@@ -656,8 +721,8 @@ async function generarPdfBlob(contenedor) {
                 div.style.margin = estilo.margin;
                 div.style.border = estilo.border;
                 div.style.borderRadius = estilo.borderRadius;
-                div.style.background = estilo.background;
-                div.style.color = estilo.color;
+                div.style.background = "transparent"; // Forzar fondo limpio
+                div.style.color = "#111111"; // Forzar letra negra
                 div.style.fontFamily = estilo.fontFamily;
                 div.style.fontSize = estilo.fontSize;
                 div.style.fontWeight = estilo.fontWeight;
@@ -706,7 +771,7 @@ async function generarPdfBlob(contenedor) {
       pdf.addPage("letter", "portrait");
     }
     pdf.addImage(
-      lienzoFinal.toDataURL("image/png, 0.75"),
+      lienzoFinal.toDataURL("image/jpeg", 0.75),
       "JPEG",
       (anchoPagina - anchoImagen) / 2,
       (altoPagina - altoImagen) / 2,
@@ -1027,6 +1092,7 @@ function crearInformeInicial(actividad = null, cuadrillaOverride = null) {
    ============================================================ */
 
 function Informes() {
+  const { usuarioActual } = useAuth();
   const { esCuadrilla, cuadrillaUsuario } = useAuth();
   const { actividades = [] } = useActividades();
 
@@ -1046,6 +1112,7 @@ function Informes() {
   const [guardando, setGuardando] = useState(false);
 
   const [generandoPdf, setGenerandoPdf] = useState(false);
+  const [desbloqueada, setDesbloqueada] = useState(false);
 
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
 
@@ -1075,6 +1142,7 @@ function Informes() {
     actual: 0,
     total: 0,
   });
+  const [faseDescarga, setFaseDescarga] = useState("idle");
 
   const editorDescripcionRef = useRef(null);
   const documentoInformeRef = useRef(null);
@@ -1106,6 +1174,11 @@ function Informes() {
   const [anchoImagen, setAnchoImagen] = useState(60);
   const [fotoRegistroSeleccionada, setFotoRegistroSeleccionada] =
     useState(null);
+
+  // 🆕 Resetear desbloqueo cuando se cambia de informe
+  useEffect(() => {
+    setDesbloqueada(false);
+  }, [informeActual?.id]);
 
   /* ============================================================
      CARGA INICIAL DE INFORMES DESDE SUPABASE
@@ -2573,6 +2646,50 @@ function Informes() {
     }
   }
 
+  // 🆕 Manejar cambio de estado (Borrador / Cerrado)
+  const manejarCambioEstado = (nuevoEstado) => {
+    if (!informeActual) return;
+    if (informeActual.estado === nuevoEstado) return;
+
+    // Si intenta salir de "Cerrado", pedir contraseña
+    if (informeActual.estado === "Cerrado" && nuevoEstado !== "Cerrado") {
+      if (!desbloqueada) {
+        const pwd = window.prompt(
+          "🔒 El informe está cerrado. Ingrese la contraseña para desbloquearlo:",
+        );
+        if (pwd === null) return;
+        if (pwd !== "EMSA1408") {
+          alert("❌ Contraseña incorrecta. El informe permanece cerrado.");
+          return;
+        }
+        setDesbloqueada(true);
+      }
+      actualizarCampo("estado", nuevoEstado);
+      return;
+    }
+
+    // Si intenta pasar A "Cerrado", pedir contraseña
+    if (nuevoEstado === "Cerrado") {
+      const pwd = window.prompt(
+        "🔒 Ingrese la contraseña para cerrar el informe:",
+      );
+      if (pwd === null) return;
+      if (pwd !== "EMSA1408") {
+        alert("❌ Contraseña incorrecta.");
+        return;
+      }
+      actualizarCampo("estado", "Cerrado");
+      setDesbloqueada(false); // Se bloquea automáticamente al cerrar
+      return;
+    }
+    registrarAuditoria(usuarioActual, "Informes", "Estado", {
+      informe: informeActual.numeroInforme,
+      nuevoEstado,
+    });
+
+    actualizarCampo("estado", nuevoEstado);
+  };
+
   /* ============================================================
      GUARDAR INFORME
      ============================================================ */
@@ -2586,7 +2703,6 @@ function Informes() {
     setGuardando(true);
 
     let descripcionHtml = informeActual.descripcionHtml || "";
-
     let descripcionActividad = informeActual.descripcionActividad || "";
 
     if (paginasEditorRefs.current.some(Boolean)) {
@@ -2597,48 +2713,89 @@ function Informes() {
         .join("");
     }
 
-    const actualizado = {
-      ...informeActual,
-
-      descripcionActividad,
-
-      descripcionHtml,
-
-      fotosActividad: informeActual.fotosActividad || [],
-
-      anomalias: informeActual.anomalias?.length
-        ? informeActual.anomalias
-        : crearAnomaliasIniciales(),
-
-      anomaliasCorregidas: informeActual.anomaliasCorregidas?.length
-        ? informeActual.anomaliasCorregidas
-        : crearAnomaliasIniciales(),
-
-      registroFotografico: informeActual.registroFotografico?.length
-        ? informeActual.registroFotografico
-        : crearEspaciosFotograficosIniciales(),
-
-      firmasDigitales: informeActual.firmasDigitales || ["", "", ""],
-      comentariosObservaciones: informeActual.comentariosObservaciones || "",
-      anexos: informeActual.anexos || "",
-      equiposRecursos: informeActual.equiposRecursos || "",
-      tiemposActividad: informeActual.tiemposActividad?.length
-        ? informeActual.tiemposActividad
-        : [
-            {
-              subestacion: "",
-              actividades: "",
-              horaInicialDesplazamiento: "",
-              horaInicialActividad: "",
-              horaFinalActividad: "",
-              horaFinalDesplazamiento: "",
-            },
-          ],
-
-      fechaActualizacion: new Date().toISOString(),
-    };
-
     try {
+      // 🆕 1. Procesar el HTML para subir imágenes internas y cambiar base64 por URLs
+      const htmlProcesado = await procesarHtmlYSubirImagenes(
+        informeActual.id,
+        descripcionHtml,
+      );
+
+      // 🆕 2. Procesar el Registro Fotográfico
+      const registroFotograficoProcesado = await Promise.all(
+        (informeActual.registroFotografico?.length
+          ? informeActual.registroFotografico
+          : crearEspaciosFotograficosIniciales()
+        ).map(async (foto, idx) => {
+          if (!foto.src) return foto;
+          const url = await subirImagenBase64AStorage(
+            informeActual.id,
+            foto.src,
+            `registro_${idx}_${Date.now()}`,
+          );
+          return { ...foto, src: url };
+        }),
+      );
+
+      // 🆕 3. Procesar Firmas Digitales
+      const firmasProcesadas = await Promise.all(
+        (informeActual.firmasDigitales || ["", "", ""]).map(
+          async (firma, idx) => {
+            if (!firma) return firma;
+            return await subirImagenBase64AStorage(
+              informeActual.id,
+              firma,
+              `firma_${idx}_${Date.now()}`,
+            );
+          },
+        ),
+      );
+
+      // 🆕 4. Procesar Fotos Antiguas (si existen)
+      const fotosActividadProcesadas = await Promise.all(
+        (informeActual.fotosActividad || []).map(async (foto, idx) => {
+          if (!foto.src) return foto;
+          const url = await subirImagenBase64AStorage(
+            informeActual.id,
+            foto.src,
+            `actividad_${idx}_${Date.now()}`,
+          );
+          return { ...foto, src: url };
+        }),
+      );
+
+      // 🆕 5. Construir el objeto final ligero (SIN BASE64)
+      const actualizado = {
+        ...informeActual,
+        descripcionActividad,
+        descripcionHtml: htmlProcesado, // HTML con URLs
+        fotosActividad: fotosActividadProcesadas,
+        anomalias: informeActual.anomalias?.length
+          ? informeActual.anomalias
+          : crearAnomaliasIniciales(),
+        anomaliasCorregidas: informeActual.anomaliasCorregidas?.length
+          ? informeActual.anomaliasCorregidas
+          : crearAnomaliasIniciales(),
+        registroFotografico: registroFotograficoProcesado, // URLs
+        firmasDigitales: firmasProcesadas, // URLs
+        comentariosObservaciones: informeActual.comentariosObservaciones || "",
+        anexos: informeActual.anexos || "",
+        equiposRecursos: informeActual.equiposRecursos || "",
+        tiemposActividad: informeActual.tiemposActividad?.length
+          ? informeActual.tiemposActividad
+          : [
+              {
+                subestacion: "",
+                actividades: "",
+                horaInicialDesplazamiento: "",
+                horaInicialActividad: "",
+                horaFinalActividad: "",
+                horaFinalDesplazamiento: "",
+              },
+            ],
+        fechaActualizacion: new Date().toISOString(),
+      };
+
+      // 6. Guardar en Supabase (el JSON ahora pesará apenas unos KB)
       await persistirInformeEnSupabase(actualizado);
 
       const metadatos = extraerMetadatos(actualizado);
@@ -2653,12 +2810,18 @@ function Informes() {
         : [...informes, informeLista];
 
       setInformes(nuevosInformes);
+
+      // Actualizamos el estado local con las URLs ya procesadas
       setInformeActual({ ...actualizado, __contenidoCargado: true });
 
       alert("Informe guardado correctamente.");
       if (actividadId) {
         setSearchParams({ actividadId, informeId: actualizado.id });
       }
+      registrarAuditoria(usuarioActual, "Informes", "Guardar", {
+        informe: actualizado.numeroInforme,
+        codigoOT: actualizado.numeroOrdenTrabajo,
+      });
     } catch (error) {
       console.error("Error guardando informe:", error);
       alert(
@@ -2696,6 +2859,9 @@ function Informes() {
       await subirPdfAStorage(informeActual.id, pdfBlob);
 
       alert("PDF generado y guardado correctamente.");
+      registrarAuditoria(usuarioActual, "Informes", "PDF", {
+        informe: informeActual.numeroInforme,
+      });
     } catch (error) {
       console.error("Error generando/subiendo PDF:", error);
       window.alert(
@@ -2711,21 +2877,36 @@ function Informes() {
      ============================================================ */
 
   async function eliminarInforme(id) {
-    const confirmar = window.confirm("¿Está seguro de eliminar este informe?");
+    const informe = informes.find((inf) => inf.id === id);
 
+    // 🆕 Si está cerrado, solicitar contraseña para eliminar
+    if (informe && informe.estado === "Cerrado") {
+      const pwd = window.prompt(
+        "🔒 Este informe está Cerrado. Ingrese la contraseña para eliminarlo:",
+      );
+      if (pwd === null) return; // Canceló
+      if (pwd !== "EMSA1408") {
+        alert("❌ Contraseña incorrecta. El informe no se eliminará.");
+        return;
+      }
+    }
+
+    const confirmar = window.confirm("¿Está seguro de eliminar este informe?");
     if (!confirmar) {
       return;
     }
 
     try {
       await eliminarInformeEnSupabase(id);
-
       const nuevosInformes = informes.filter((informe) => informe.id !== id);
-
       setInformes(nuevosInformes);
       setInformesSeleccionados((seleccionados) =>
         seleccionados.filter((seleccionado) => seleccionado !== id),
       );
+      registrarAuditoria(usuarioActual, "Informes", "Eliminar", {
+        informe: informe.numeroInforme,
+        codigoOT: informe.numeroOrdenTrabajo,
+      });
     } catch (error) {
       console.error("Error eliminando informe:", error);
       window.alert("No fue posible eliminar el informe. Intente nuevamente.");
@@ -2768,48 +2949,71 @@ function Informes() {
     }
 
     setDescargandoPdf(true);
+    setFaseDescarga("verificando");
     setProgresoDescargaPdf({ actual: 0, total: seleccionados.length });
 
     try {
-      const conPdf = [];
-      const sinPdf = [];
+      // 🎯 VERIFICACIÓN PARALELA (antes era serial, -50% de tiempo)
+      const verificaciones = await Promise.all(
+        seleccionados.map(async (informe) => {
+          try {
+            const existe = await existePdfEnStorage(informe.id);
+            return { informe, existe };
+          } catch {
+            return { informe, existe: false };
+          }
+        }),
+      );
 
-      for (const informe of seleccionados) {
-        const existe = await existePdfEnStorage(informe.id);
-        if (existe) {
-          conPdf.push(informe);
-        } else {
-          sinPdf.push(informe);
-        }
+      const conPdf = verificaciones
+        .filter((v) => v.existe)
+        .map((v) => v.informe);
+      const sinPdf = verificaciones
+        .filter((v) => !v.existe)
+        .map((v) => v.informe);
+
+      // 🎯 DESCARGA PARALELA con concurrencia 3
+      if (conPdf.length > 0) {
+        setFaseDescarga("descargando");
+        setProgresoDescargaPdf({ actual: 0, total: conPdf.length });
+
+        const CONCURRENCIA = 3;
+        const cola = [...conPdf];
+        let completadas = 0;
+
+        const procesarSiguiente = async () => {
+          while (cola.length > 0) {
+            const informe = cola.shift();
+            if (!informe) break;
+
+            const path = `informes/${informe.id}/informe.pdf`;
+            const url = obtenerUrlPublica(path);
+            const nombre = construirNombrePdf(informe);
+
+            try {
+              await descargarPdfDesdeUrl(url, nombre);
+            } catch (error) {
+              console.error(`Error descargando PDF de ${informe.id}:`, error);
+            } finally {
+              completadas++;
+              setProgresoDescargaPdf({
+                actual: completadas,
+                total: conPdf.length,
+              });
+            }
+          }
+        };
+
+        const workers = Array.from({ length: CONCURRENCIA }, () =>
+          procesarSiguiente(),
+        );
+        await Promise.all(workers);
       }
 
-      for (let i = 0; i < conPdf.length; i++) {
-        const informe = conPdf[i];
-
-        setProgresoDescargaPdf({
-          actual: i + 1,
-          total: seleccionados.length,
-        });
-
-        const path = `informes/${informe.id}/informe.pdf`;
-        const url = obtenerUrlPublica(path);
-        const nombre = construirNombrePdf(informe);
-
-        try {
-          await descargarPdfDesdeUrl(url, nombre);
-        } catch (error) {
-          console.error("Error descargando PDF:", error);
-          window.alert(
-            `No se pudo descargar el PDF de "${informe.numeroInforme || informe.id}".`,
-          );
-        }
-
-        if (i < conPdf.length - 1) {
-          await new Promise((r) => window.setTimeout(r, 400));
-        }
-      }
-
+      // 🎯 Generar los PDFs faltantes (proceso secuencial, ya que requiere
+      //     cargar el informe en el DOM de a uno)
       if (sinPdf.length > 0) {
+        setFaseDescarga("generando");
         setGenerandoPdfLote({
           activo: true,
           total: sinPdf.length,
@@ -2821,7 +3025,12 @@ function Informes() {
       }
     } finally {
       setDescargandoPdf(false);
-      setProgresoDescargaPdf({ actual: 0, total: 0 });
+      setFaseDescarga("idle");
+      // Resetear solo si NO hay generación en curso (la generación
+      // tiene su propio progreso que debe seguir visible)
+      if (!generandoPdfLote.activo) {
+        setProgresoDescargaPdf({ actual: 0, total: 0 });
+      }
     }
   }
 
@@ -3007,6 +3216,7 @@ function Informes() {
      ============================================================ */
 
   if ((mostrarFormulario || generandoPdfLote.activo) && informeActual) {
+    const estaCerrado = informeActual.estado === "Cerrado" && !desbloqueada;
     const descripcionTieneContenido = Boolean(
       informeActual.descripcionHtml || informeActual.descripcionActividad,
     );
@@ -3136,6 +3346,18 @@ function Informes() {
             {generandoPdf ? "Generando PDF..." : "Generar PDF"}
           </button>
 
+          {/* 🆕 Selector de Estado al final del lado derecho */}
+          <select
+            className={`informe-status-select status-${(informeActual.estado || "Borrador").toLowerCase()}`}
+            value={informeActual.estado || "Borrador"}
+            onChange={(e) => manejarCambioEstado(e.target.value)}
+            title="Estado del informe"
+            style={{ marginLeft: "auto", marginRight: "10px" }} // Empuja hacia la derecha
+          >
+            <option value="Borrador">Borrador</option>
+            <option value="Cerrado">Cerrado</option>
+          </select>
+
           <div className="descripcion-herramientas descripcion-herramientas-fija">
             <div className="descripcion-herramientas-info">
               <span className="descripcion-herramientas-icono">✎</span>
@@ -3216,403 +3438,313 @@ function Informes() {
             )}
           </div>
         </div>
-
-        <div
-          className="informe-documento-contenedor"
-          ref={(elemento) => {
-            documentoInformeRef.current = elemento;
-          }}
+        {/* 🆕 Envolver en fieldset para bloquear todo */}
+        <fieldset
+          disabled={estaCerrado}
+          className={`informe-fieldset ${estaCerrado ? "informe-bloqueado" : ""}`}
+          style={{ border: "none", padding: 0, margin: 0, width: "100%" }}
         >
-          <div className="informe-hoja">
-            <table className="informe-encabezado">
-              <tbody>
-                <tr>
-                  <td rowSpan="4" className="encabezado-logo">
-                    <img src="/logo-emsa.png" alt="EMSA" />
-                  </td>
+          <div
+            className="informe-documento-contenedor"
+            ref={(elemento) => {
+              documentoInformeRef.current = elemento;
+            }}
+          >
+            {/* ... todo el contenido de las hojas ... */}
+            <div className="informe-hoja">
+              <table className="informe-encabezado">
+                <tbody>
+                  <tr>
+                    <td rowSpan="4" className="encabezado-logo">
+                      <img src="/logo-emsa.png" alt="EMSA" />
+                    </td>
 
-                  <td className="encabezado-label">CÓDIGO:</td>
+                    <td className="encabezado-label">CÓDIGO:</td>
 
-                  <td className="encabezado-valor">EMSA-MTO-IF-01</td>
-                </tr>
+                    <td className="encabezado-valor">EMSA-MTO-IF-01</td>
+                  </tr>
 
-                <tr>
-                  <td className="encabezado-label">VERSIÓN:</td>
+                  <tr>
+                    <td className="encabezado-label">VERSIÓN:</td>
 
-                  <td className="encabezado-valor">01</td>
-                </tr>
+                    <td className="encabezado-valor">01</td>
+                  </tr>
 
-                <tr>
-                  <td className="encabezado-label">FECHA:</td>
+                  <tr>
+                    <td className="encabezado-label">FECHA:</td>
 
-                  <td className="encabezado-valor">
-                    {formatearFecha(informeActual.fechaCreacion)}
-                  </td>
-                </tr>
+                    <td className="encabezado-valor">
+                      {formatearFecha(informeActual.fechaCreacion)}
+                    </td>
+                  </tr>
 
-                <tr>
-                  <td colSpan="2" className="encabezado-pagina">
-                    PÁGINA 1 DE {totalPaginasInforme}
-                  </td>
-                </tr>
+                  <tr>
+                    <td colSpan="2" className="encabezado-pagina">
+                      PÁGINA 1 DE {totalPaginasInforme}
+                    </td>
+                  </tr>
 
-                <tr>
-                  <td className="encabezado-titulo-izquierdo">
-                    INFORME REPORTE DEMANTENIMIENTO DIARIO
-                  </td>
+                  <tr>
+                    <td className="encabezado-titulo-izquierdo">
+                      INFORME REPORTE DEMANTENIMIENTO DIARIO
+                    </td>
 
-                  <td colSpan="2" className="encabezado-titulo-derecho">
-                    MANTENIMIENTO DEL SISTEMA ELÉCTRICO
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+                    <td colSpan="2" className="encabezado-titulo-derecho">
+                      MANTENIMIENTO DEL SISTEMA ELÉCTRICO
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
 
-            <section className="informe-primera-seccion">
-              <div className="fila-completa">
-                <div className="celda-contrato">
-                  CONTRATO DE MANTENIMIENTO DE SUBESTACIONES DEL META
-                  NO.4500010069
-                </div>
-              </div>
-
-              <div className="fila-completa">
-                <div className="celda-electrificadora">
-                  ELECTRIFICADORA DEL META S.A. E.S.P.
-                </div>
-              </div>
-
-              <div className="fila-cuatro-columnas">
-                <div className="celda-label">NO DE INFORME</div>
-
-                <div className="celda-input">
-                  <input
-                    type="text"
-                    value={informeActual.numeroInforme || ""}
-                    onChange={(e) =>
-                      actualizarCampo("numeroInforme", e.target.value)
-                    }
-                    placeholder=" "
-                  />
+              <section className="informe-primera-seccion">
+                <div className="fila-completa">
+                  <div className="celda-contrato">
+                    CONTRATO DE MANTENIMIENTO DE SUBESTACIONES DEL META
+                    NO.4500010069
+                  </div>
                 </div>
 
-                <div className="celda-label">FECHA INICIO</div>
-
-                <div className="celda-input">
-                  <input
-                    type="date"
-                    value={informeActual.fechaInicio || ""}
-                    onChange={(e) =>
-                      actualizarCampo("fechaInicio", e.target.value)
-                    }
-                  />
-                </div>
-              </div>
-
-              <div className="fila-cuatro-columnas">
-                <div className="celda-label celda-label-doble">
-                  NO DE ORDEN DE
-                  <br />
-                  TRABAJO
+                <div className="fila-completa">
+                  <div className="celda-electrificadora">
+                    ELECTRIFICADORA DEL META S.A. E.S.P.
+                  </div>
                 </div>
 
-                <div className="celda-input">
-                  <input
-                    type="text"
-                    value={informeActual.numeroOrdenTrabajo || ""}
-                    onChange={(e) =>
-                      actualizarCampo("numeroOrdenTrabajo", e.target.value)
-                    }
-                    placeholder=" "
-                  />
-                </div>
+                <div className="fila-cuatro-columnas">
+                  <div className="celda-label">NO DE INFORME</div>
 
-                <div className="celda-label celda-label-doble">
-                  FECHA
-                  <br />
-                  FIN
-                </div>
-
-                <div className="celda-input">
-                  <input
-                    type="date"
-                    value={informeActual.fechaFin || ""}
-                    onChange={(e) =>
-                      actualizarCampo("fechaFin", e.target.value)
-                    }
-                  />
-                </div>
-              </div>
-
-              <div className="fila-cuatro-columnas">
-                <div className="celda-label">SUBESTACIÓN:</div>
-
-                <div className="celda-input">
-                  <input
-                    type="text"
-                    value={informeActual.subestacion || ""}
-                    onChange={(e) =>
-                      actualizarCampo("subestacion", e.target.value)
-                    }
-                    placeholder=" "
-                  />
-                </div>
-
-                <div className="celda-label">RECONECTADOR</div>
-
-                <div className="celda-input">
-                  <input
-                    type="text"
-                    value={informeActual.reconectador || ""}
-                    onChange={(e) =>
-                      actualizarCampo("reconectador", e.target.value)
-                    }
-                    placeholder=" "
-                  />
-                </div>
-              </div>
-
-              <div className="fila-personal">
-                <div className="celda-personal-titulo">
-                  PERSONAL
-                  <br />
-                  EJECUTOR
-                </div>
-
-                <div className="celda-personal-lista">
-                  {[0, 1, 2].map((indice) => (
-                    <div className="personal-linea" key={indice}>
-                      <span>{indice + 1}.</span>
-
-                      <input
-                        type="text"
-                        value={informeActual.personalEjecutor?.[indice] || ""}
-                        onChange={(e) =>
-                          actualizarPersonal(indice, e.target.value)
-                        }
-                        placeholder=" "
-                      />
-                    </div>
-                  ))}
-                </div>
-
-                <div className="celda-cedula-titulo">CEDULA</div>
-
-                <div className="celda-cedula-lista">
-                  {[0, 1, 2].map((indice) => (
-                    <div className="personal-linea" key={indice}>
-                      <span>{indice + 1}.</span>
-
-                      <input
-                        type="text"
-                        value={informeActual.cedulas?.[indice] || ""}
-                        onChange={(e) =>
-                          actualizarCedula(indice, e.target.value)
-                        }
-                        placeholder=" "
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="fila-firmas-nombres">
-                <div className="bloque-firma-nombre">
-                  <div className="firma-nombre-titulo">Elaborado por:</div>
-
-                  <input
-                    type="text"
-                    value={informeActual.elaboradoPor || ""}
-                    onChange={(e) =>
-                      actualizarCampo("elaboradoPor", e.target.value)
-                    }
-                    placeholder=" "
-                  />
-                </div>
-
-                <div className="bloque-firma-nombre">
-                  <div className="firma-nombre-titulo">
-                    Revisado por: Tec sop
+                  <div className="celda-input">
+                    <input
+                      type="text"
+                      value={informeActual.numeroInforme || ""}
+                      onChange={(e) =>
+                        actualizarCampo("numeroInforme", e.target.value)
+                      }
+                      placeholder=" "
+                    />
                   </div>
 
-                  <input
-                    type="text"
-                    value={informeActual.revisadoPor || ""}
-                    onChange={(e) =>
-                      actualizarCampo("revisadoPor", e.target.value)
-                    }
-                    placeholder=" "
-                  />
+                  <div className="celda-label">FECHA INICIO</div>
+
+                  <div className="celda-input">
+                    <input
+                      type="date"
+                      value={informeActual.fechaInicio || ""}
+                      onChange={(e) =>
+                        actualizarCampo("fechaInicio", e.target.value)
+                      }
+                    />
+                  </div>
                 </div>
 
-                <div className="bloque-firma-nombre">
-                  <div className="firma-nombre-titulo">
-                    Aprobado Por: Ing. Coordinador
+                <div className="fila-cuatro-columnas">
+                  <div className="celda-label celda-label-doble">
+                    NO DE ORDEN DE
+                    <br />
+                    TRABAJO
                   </div>
 
-                  <input
-                    type="text"
-                    value={informeActual.aprobadoPor || ""}
-                    onChange={(e) =>
-                      actualizarCampo("aprobadoPor", e.target.value)
-                    }
-                    placeholder=" "
-                  />
-                </div>
-              </div>
+                  <div className="celda-input">
+                    <input
+                      type="text"
+                      value={informeActual.numeroOrdenTrabajo || ""}
+                      onChange={(e) =>
+                        actualizarCampo("numeroOrdenTrabajo", e.target.value)
+                      }
+                      placeholder=" "
+                    />
+                  </div>
 
-              <div className="fila-firmas">
-                {["firma", "firma", "FIRMA"].map((etiqueta, indice) => (
-                  <div className="espacio-firma" key={etiqueta + indice}>
-                    {informeActual.firmasDigitales?.[indice] ? (
-                      <img
-                        src={informeActual.firmasDigitales[indice]}
-                        alt={`Firma digital ${indice + 1}`}
-                        tabIndex="0"
-                        onKeyDown={(event) => {
-                          if (event.key === "Delete" || event.key === "Supr") {
-                            event.preventDefault();
-                            eliminarFirmaDigital(indice);
-                          }
-                        }}
-                      />
-                    ) : (
-                      <label className="cargar-firma-digital">
-                        {etiqueta}
+                  <div className="celda-label celda-label-doble">
+                    FECHA
+                    <br />
+                    FIN
+                  </div>
+
+                  <div className="celda-input">
+                    <input
+                      type="date"
+                      value={informeActual.fechaFin || ""}
+                      onChange={(e) =>
+                        actualizarCampo("fechaFin", e.target.value)
+                      }
+                    />
+                  </div>
+                </div>
+
+                <div className="fila-cuatro-columnas">
+                  <div className="celda-label">SUBESTACIÓN:</div>
+
+                  <div className="celda-input">
+                    <input
+                      type="text"
+                      value={informeActual.subestacion || ""}
+                      onChange={(e) =>
+                        actualizarCampo("subestacion", e.target.value)
+                      }
+                      placeholder=" "
+                    />
+                  </div>
+
+                  <div className="celda-label">RECONECTADOR</div>
+
+                  <div className="celda-input">
+                    <input
+                      type="text"
+                      value={informeActual.reconectador || ""}
+                      onChange={(e) =>
+                        actualizarCampo("reconectador", e.target.value)
+                      }
+                      placeholder=" "
+                    />
+                  </div>
+                </div>
+
+                <div className="fila-personal">
+                  <div className="celda-personal-titulo">
+                    PERSONAL
+                    <br />
+                    EJECUTOR
+                  </div>
+
+                  <div className="celda-personal-lista">
+                    {[0, 1, 2].map((indice) => (
+                      <div className="personal-linea" key={indice}>
+                        <span>{indice + 1}.</span>
+
                         <input
-                          type="file"
-                          accept="image/*"
-                          onChange={(event) =>
-                            actualizarFirmaDigital(indice, event)
+                          type="text"
+                          value={informeActual.personalEjecutor?.[indice] || ""}
+                          onChange={(e) =>
+                            actualizarPersonal(indice, e.target.value)
                           }
+                          placeholder=" "
                         />
-                      </label>
-                    )}
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </section>
 
-            <section className="informe-descripcion-seccion">
-              <div className="descripcion-titulo">DESCRIPCIÓN DE ACTIVIDAD</div>
+                  <div className="celda-cedula-titulo">CEDULA</div>
 
-              <div
-                ref={(elemento) => {
-                  paginasEditorRefs.current[0] = elemento;
-                  if (elemento && !editorDescripcionRef.current) {
-                    editorDescripcionRef.current = elemento;
-                  }
-                }}
-                className="descripcion-editor descripcion-pagina-editor"
-                contentEditable
-                suppressContentEditableWarning
-                spellCheck
-                data-placeholder={
-                  descripcionTieneContenido
-                    ? ""
-                    : "Detalle aquí todas las actividades realizadas..."
-                }
-                onFocus={(event) => {
-                  editorDescripcionRef.current = event.currentTarget;
-                }}
-                onInput={manejarInputDescripcion}
-                onKeyDown={manejarKeyDownDescripcion}
-                onKeyUp={manejarKeyUpDescripcion}
-                onMouseUp={guardarSeleccionDescripcion}
-                onClick={manejarClickDescripcion}
-              ></div>
+                  <div className="celda-cedula-lista">
+                    {[0, 1, 2].map((indice) => (
+                      <div className="personal-linea" key={indice}>
+                        <span>{indice + 1}.</span>
 
-              <div className="descripcion-ayuda-editor">
-                <span>
-                  Puede escribir texto, insertar fotografías en la posición del
-                  cursor y continuar escribiendo debajo de cada imagen.
-                </span>
+                        <input
+                          type="text"
+                          value={informeActual.cedulas?.[indice] || ""}
+                          onChange={(e) =>
+                            actualizarCedula(indice, e.target.value)
+                          }
+                          placeholder=" "
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
 
-                <span>Para cambiar el tamaño, seleccione una fotografía.</span>
-              </div>
-            </section>
+                <div className="fila-firmas-nombres">
+                  <div className="bloque-firma-nombre">
+                    <div className="firma-nombre-titulo">Elaborado por:</div>
 
-            {informeActual.fotosActividad?.length > 0 && (
-              <section className="fotos-antiguas-compatibilidad">
-                <div className="fotos-antiguas-titulo">FOTOGRAFÍAS ANEXAS</div>
+                    <input
+                      type="text"
+                      value={informeActual.elaboradoPor || ""}
+                      onChange={(e) =>
+                        actualizarCampo("elaboradoPor", e.target.value)
+                      }
+                      placeholder=" "
+                    />
+                  </div>
 
-                <div className="fotos-antiguas-lista">
-                  {informeActual.fotosActividad.map((foto, indice) => (
-                    <div
-                      className="foto-antigua"
-                      key={foto.id || `${foto.src}-${indice}`}
-                    >
-                      <img src={foto.src} alt={`Evidencia ${indice + 1}`} />
+                  <div className="bloque-firma-nombre">
+                    <div className="firma-nombre-titulo">
+                      Revisado por: Tec sop
+                    </div>
 
-                      <button
-                        type="button"
-                        className="btn-eliminar-foto"
-                        onClick={() => eliminarFotografia(indice)}
-                        title="Eliminar fotografía"
-                      >
-                        ×
-                      </button>
+                    <input
+                      type="text"
+                      value={informeActual.revisadoPor || ""}
+                      onChange={(e) =>
+                        actualizarCampo("revisadoPor", e.target.value)
+                      }
+                      placeholder=" "
+                    />
+                  </div>
+
+                  <div className="bloque-firma-nombre">
+                    <div className="firma-nombre-titulo">
+                      Aprobado Por: Ing. Coordinador
+                    </div>
+
+                    <input
+                      type="text"
+                      value={informeActual.aprobadoPor || ""}
+                      onChange={(e) =>
+                        actualizarCampo("aprobadoPor", e.target.value)
+                      }
+                      placeholder=" "
+                    />
+                  </div>
+                </div>
+
+                <div className="fila-firmas">
+                  {["firma", "firma", "FIRMA"].map((etiqueta, indice) => (
+                    <div className="espacio-firma" key={etiqueta + indice}>
+                      {informeActual.firmasDigitales?.[indice] ? (
+                        <img
+                          src={informeActual.firmasDigitales[indice]}
+                          alt={`Firma digital ${indice + 1}`}
+                          tabIndex="0"
+                          onKeyDown={(event) => {
+                            if (
+                              event.key === "Delete" ||
+                              event.key === "Supr"
+                            ) {
+                              event.preventDefault();
+                              eliminarFirmaDigital(indice);
+                            }
+                          }}
+                        />
+                      ) : (
+                        <label className="cargar-firma-digital">
+                          {etiqueta}
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(event) =>
+                              actualizarFirmaDigital(indice, event)
+                            }
+                          />
+                        </label>
+                      )}
                     </div>
                   ))}
                 </div>
               </section>
-            )}
 
-            <div className="informe-area-blanca"></div>
-          </div>
+              <section className="informe-descripcion-seccion">
+                <div className="descripcion-titulo">
+                  DESCRIPCIÓN DE ACTIVIDAD
+                </div>
 
-          {paginasDescripcion.slice(1).map((_, indice) => {
-            const pagina = indice + 1;
-            return (
-              <div
-                className="informe-hoja-pagina informe-hoja-continuacion"
-                key={`${informeActual.id}-descripcion-${pagina}`}
-              >
-                <table className="informe-encabezado">
-                  <tbody>
-                    <tr>
-                      <td rowSpan="4" className="encabezado-logo">
-                        <img src="/logo-emsa.png" alt="EMSA" />
-                      </td>
-                      <td className="encabezado-label">CÓDIGO:</td>
-                      <td className="encabezado-valor">EMSA-MTO-IF-01</td>
-                    </tr>
-                    <tr>
-                      <td className="encabezado-label">VERSIÓN:</td>
-                      <td className="encabezado-valor">01</td>
-                    </tr>
-                    <tr>
-                      <td className="encabezado-label">FECHA:</td>
-                      <td className="encabezado-valor">
-                        {formatearFecha(informeActual.fechaCreacion)}
-                      </td>
-                    </tr>
-                    <tr>
-                      <td colSpan="2" className="encabezado-pagina">
-                        PÁGINA {pagina + 1} DE {totalPaginasInforme}
-                      </td>
-                    </tr>
-                    <tr>
-                      <td className="encabezado-titulo-izquierdo">
-                        INFORME REPORTE DE
-                        <br />
-                        MANTENIMIENTO DIARIO
-                      </td>
-                      <td colSpan="2" className="encabezado-titulo-derecho">
-                        MANTENIMIENTO DEL
-                        <br />
-                        SISTEMA ELÉCTRICO
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
                 <div
-                  className="descripcion-editor descripcion-pagina-editor"
-                  contentEditable
-                  suppressContentEditableWarning
                   ref={(elemento) => {
-                    paginasEditorRefs.current[pagina] = elemento;
+                    paginasEditorRefs.current[0] = elemento;
+                    if (elemento && !editorDescripcionRef.current) {
+                      editorDescripcionRef.current = elemento;
+                    }
                   }}
+                  className="descripcion-editor descripcion-pagina-editor"
+                  contentEditable={!estaCerrado}
+                  suppressContentEditableWarning
+                  spellCheck
+                  data-placeholder={
+                    descripcionTieneContenido
+                      ? ""
+                      : "Detalle aquí todas las actividades realizadas..."
+                  }
                   onFocus={(event) => {
                     editorDescripcionRef.current = event.currentTarget;
                   }}
@@ -3622,180 +3754,127 @@ function Informes() {
                   onMouseUp={guardarSeleccionDescripcion}
                   onClick={manejarClickDescripcion}
                 ></div>
-              </div>
-            );
-          })}
 
-          {bloquesAnomalias.map((reporte, indiceReporte) => {
-            const numeroPagina = paginasDescripcion.length + indiceReporte + 1;
-            const indiceInicial =
-              reporte.indiceBloque * FILAS_ANOMALIAS_POR_HOJA;
+                <div className="descripcion-ayuda-editor">
+                  <span>
+                    Puede escribir texto, insertar fotografías en la posición
+                    del cursor y continuar escribiendo debajo de cada imagen.
+                  </span>
 
-            return (
-              <section
-                className="informe-hoja-pagina informe-hoja-anomalias"
-                key={`${informeActual.id}-${reporte.nombreColeccion}-${reporte.indiceBloque}`}
-              >
-                <table className="informe-encabezado reporte-anomalias-encabezado">
-                  <tbody>
-                    <tr>
-                      <td rowSpan="4" className="encabezado-logo">
-                        <img src="/logo-emsa.png" alt="EMSA" />
-                      </td>
-                      <td className="encabezado-label">CÓDIGO:</td>
-                      <td className="encabezado-valor">EMSA-MTO-IF-01</td>
-                    </tr>
-                    <tr>
-                      <td className="encabezado-label">VERSIÓN:</td>
-                      <td className="encabezado-valor">01</td>
-                    </tr>
-                    <tr>
-                      <td className="encabezado-label">FECHA:</td>
-                      <td className="encabezado-valor">
-                        {formatearFecha(informeActual.fechaCreacion)}
-                      </td>
-                    </tr>
-                    <tr>
-                      <td colSpan="2" className="encabezado-pagina">
-                        PÁGINA {numeroPagina} DE {totalPaginasInforme}
-                      </td>
-                    </tr>
-                    <tr>
-                      <td className="encabezado-titulo-izquierdo">
-                        INFORME REPORTE DE
-                        <br />
-                        MANTENIMIENTO DIARIO
-                      </td>
-                      <td colSpan="2" className="encabezado-titulo-derecho">
-                        MANTENIMIENTO DEL
-                        <br />
-                        SISTEMA ELÉCTRICO
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-
-                <div className="reporte-anomalias">
-                  <div className="reporte-anomalias-titulo">
-                    {reporte.titulo}
-                  </div>
-
-                  <table className="reporte-anomalias-tabla">
-                    <colgroup>
-                      <col className="reporte-col-equipo" />
-                      <col className="reporte-col-serie" />
-                      <col className="reporte-col-inventario" />
-                      <col className="reporte-col-observacion" />
-                      <col className="reporte-col-estado" />
-                    </colgroup>
-                    <thead>
-                      <tr>
-                        {reporte.columnas.map(([, etiqueta]) => (
-                          <th key={etiqueta}>{etiqueta.toUpperCase()}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {reporte.bloque.map((anomalia, indice) => {
-                        const indiceGlobal = indiceInicial + indice;
-
-                        return (
-                          <tr
-                            key={`${informeActual.id}-anomalia-${indiceGlobal}`}
-                          >
-                            {reporte.columnas.map(
-                              ([campo, etiqueta], indiceCampo) => (
-                                <td key={campo}>
-                                  <textarea
-                                    ref={(elemento) => {
-                                      if (elemento) {
-                                        elemento.style.height = "auto";
-                                        elemento.style.height = `${elemento.scrollHeight}px`;
-                                      }
-                                    }}
-                                    value={anomalia[campo]}
-                                    onChange={(event) => {
-                                      const valor = event.target.value;
-                                      const esUltimaFila =
-                                        indiceGlobal ===
-                                        reporte.filas.length - 1;
-                                      const creoNuevaFila =
-                                        indiceCampo ===
-                                          reporte.columnas.length - 1 &&
-                                        esUltimaFila &&
-                                        valor.includes("\n");
-
-                                      actualizarAnomalia(
-                                        indiceGlobal,
-                                        campo,
-                                        creoNuevaFila
-                                          ? valor.replace(/\n/g, "")
-                                          : valor,
-                                        reporte.nombreColeccion,
-                                      );
-
-                                      if (creoNuevaFila) {
-                                        agregarFilaAnomalia(
-                                          reporte.nombreColeccion,
-                                        );
-                                      }
-                                    }}
-                                    onInput={ajustarAlturaAnomalia}
-                                    onKeyDown={(event) => {
-                                      if (
-                                        event.key === "Enter" &&
-                                        indiceCampo ===
-                                          reporte.columnas.length - 1 &&
-                                        indiceGlobal ===
-                                          reporte.filas.length - 1
-                                      ) {
-                                        event.preventDefault();
-                                        agregarFilaAnomalia(
-                                          reporte.nombreColeccion,
-                                        );
-                                      }
-
-                                      if (
-                                        event.key === "Delete" &&
-                                        indiceCampo ===
-                                          reporte.columnas.length - 1
-                                      ) {
-                                        event.preventDefault();
-                                        eliminarFilaAnomalia(
-                                          indiceGlobal,
-                                          reporte.nombreColeccion,
-                                        );
-                                      }
-                                    }}
-                                    aria-label={`${etiqueta}, fila ${indiceGlobal + 1}`}
-                                  ></textarea>
-                                </td>
-                              ),
-                            )}
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                  <span>
+                    Para cambiar el tamaño, seleccione una fotografía.
+                  </span>
                 </div>
               </section>
-            );
-          })}
 
-          {paginasFotograficas.map((bloque, indicePagina) => {
-            const numeroPagina =
-              paginasDescripcion.length +
-              bloquesAnomalias.length +
-              indicePagina +
-              1;
-            const indiceInicial = indicePagina * ESPACIOS_FOTOGRAFICOS_POR_HOJA;
+              {informeActual.fotosActividad?.length > 0 && (
+                <section className="fotos-antiguas-compatibilidad">
+                  <div className="fotos-antiguas-titulo">
+                    FOTOGRAFÍAS ANEXAS
+                  </div>
 
-            return (
-              <Fragment
-                key={`${informeActual.id}-registro-fotografico-${indicePagina}`}
-              >
-                <section className="informe-hoja-pagina informe-hoja-fotografias">
-                  <table className="informe-encabezado registro-fotografico-encabezado">
+                  <div className="fotos-antiguas-lista">
+                    {informeActual.fotosActividad.map((foto, indice) => (
+                      <div
+                        className="foto-antigua"
+                        key={foto.id || `${foto.src}-${indice}`}
+                      >
+                        <img src={foto.src} alt={`Evidencia ${indice + 1}`} />
+
+                        <button
+                          type="button"
+                          className="btn-eliminar-foto"
+                          onClick={() => eliminarFotografia(indice)}
+                          title="Eliminar fotografía"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              <div className="informe-area-blanca"></div>
+            </div>
+
+            {paginasDescripcion.slice(1).map((_, indice) => {
+              const pagina = indice + 1;
+              return (
+                <div
+                  className="informe-hoja-pagina informe-hoja-continuacion"
+                  key={`${informeActual.id}-descripcion-${pagina}`}
+                >
+                  <table className="informe-encabezado">
+                    <tbody>
+                      <tr>
+                        <td rowSpan="4" className="encabezado-logo">
+                          <img src="/logo-emsa.png" alt="EMSA" />
+                        </td>
+                        <td className="encabezado-label">CÓDIGO:</td>
+                        <td className="encabezado-valor">EMSA-MTO-IF-01</td>
+                      </tr>
+                      <tr>
+                        <td className="encabezado-label">VERSIÓN:</td>
+                        <td className="encabezado-valor">01</td>
+                      </tr>
+                      <tr>
+                        <td className="encabezado-label">FECHA:</td>
+                        <td className="encabezado-valor">
+                          {formatearFecha(informeActual.fechaCreacion)}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td colSpan="2" className="encabezado-pagina">
+                          PÁGINA {pagina + 1} DE {totalPaginasInforme}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td className="encabezado-titulo-izquierdo">
+                          INFORME REPORTE DE
+                          <br />
+                          MANTENIMIENTO DIARIO
+                        </td>
+                        <td colSpan="2" className="encabezado-titulo-derecho">
+                          MANTENIMIENTO DEL
+                          <br />
+                          SISTEMA ELÉCTRICO
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  <div
+                    className="descripcion-editor descripcion-pagina-editor"
+                    contentEditable={!estaCerrado}
+                    suppressContentEditableWarning
+                    ref={(elemento) => {
+                      paginasEditorRefs.current[pagina] = elemento;
+                    }}
+                    onFocus={(event) => {
+                      editorDescripcionRef.current = event.currentTarget;
+                    }}
+                    onInput={manejarInputDescripcion}
+                    onKeyDown={manejarKeyDownDescripcion}
+                    onKeyUp={manejarKeyUpDescripcion}
+                    onMouseUp={guardarSeleccionDescripcion}
+                    onClick={manejarClickDescripcion}
+                  ></div>
+                </div>
+              );
+            })}
+
+            {bloquesAnomalias.map((reporte, indiceReporte) => {
+              const numeroPagina =
+                paginasDescripcion.length + indiceReporte + 1;
+              const indiceInicial =
+                reporte.indiceBloque * FILAS_ANOMALIAS_POR_HOJA;
+
+              return (
+                <section
+                  className="informe-hoja-pagina informe-hoja-anomalias"
+                  key={`${informeActual.id}-${reporte.nombreColeccion}-${reporte.indiceBloque}`}
+                >
+                  <table className="informe-encabezado reporte-anomalias-encabezado">
                     <tbody>
                       <tr>
                         <td rowSpan="4" className="encabezado-logo">
@@ -3834,222 +3913,383 @@ function Informes() {
                     </tbody>
                   </table>
 
-                  <div className="registro-fotografico">
-                    <div className="registro-fotografico-titulo">
-                      REGISTRO FOTOGRÁFICO
+                  <div className="reporte-anomalias">
+                    <div className="reporte-anomalias-titulo">
+                      {reporte.titulo}
                     </div>
-                    <div className="registro-fotografico-cuadricula">
-                      {bloque.map((foto, indice) => {
-                        const indiceGlobal = indiceInicial + indice;
 
-                        return (
-                          <div
-                            className="registro-fotografico-celda"
-                            key={`${informeActual.id}-foto-${indiceGlobal}`}
-                          >
-                            <div className="registro-fotografico-imagen">
-                              {foto.src ? (
-                                <img
-                                  src={foto.src}
-                                  alt={`Registro fotográfico ${indiceGlobal + 1}`}
-                                  tabIndex="0"
-                                  className={
-                                    fotoRegistroSeleccionada === indiceGlobal
-                                      ? "registro-fotografico-imagen-seleccionada"
-                                      : ""
-                                  }
-                                  onClick={(event) => {
-                                    event.currentTarget.focus();
-                                    setFotoRegistroSeleccionada(indiceGlobal);
-                                  }}
-                                  onKeyDown={(event) => {
-                                    if (
-                                      event.key === "Delete" ||
-                                      event.key === "Supr"
-                                    ) {
-                                      event.preventDefault();
-                                      eliminarImagenFotografica(indiceGlobal);
-                                    }
-                                  }}
-                                />
-                              ) : (
-                                <label className="registro-fotografico-cargar">
-                                  Agregar imagen
-                                  <input
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={(event) =>
-                                      cargarImagenFotografica(
-                                        indiceGlobal,
-                                        event,
-                                      )
-                                    }
-                                  />
-                                </label>
+                    <table className="reporte-anomalias-tabla">
+                      <colgroup>
+                        <col className="reporte-col-equipo" />
+                        <col className="reporte-col-serie" />
+                        <col className="reporte-col-inventario" />
+                        <col className="reporte-col-observacion" />
+                        <col className="reporte-col-estado" />
+                      </colgroup>
+                      <thead>
+                        <tr>
+                          {reporte.columnas.map(([, etiqueta]) => (
+                            <th key={etiqueta}>{etiqueta.toUpperCase()}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {reporte.bloque.map((anomalia, indice) => {
+                          const indiceGlobal = indiceInicial + indice;
+
+                          return (
+                            <tr
+                              key={`${informeActual.id}-anomalia-${indiceGlobal}`}
+                            >
+                              {reporte.columnas.map(
+                                ([campo, etiqueta], indiceCampo) => (
+                                  <td key={campo}>
+                                    <textarea
+                                      ref={(elemento) => {
+                                        if (elemento) {
+                                          elemento.style.height = "auto";
+                                          elemento.style.height = `${elemento.scrollHeight}px`;
+                                        }
+                                      }}
+                                      value={anomalia[campo]}
+                                      onChange={(event) => {
+                                        const valor = event.target.value;
+                                        const esUltimaFila =
+                                          indiceGlobal ===
+                                          reporte.filas.length - 1;
+                                        const creoNuevaFila =
+                                          indiceCampo ===
+                                            reporte.columnas.length - 1 &&
+                                          esUltimaFila &&
+                                          valor.includes("\n");
+
+                                        actualizarAnomalia(
+                                          indiceGlobal,
+                                          campo,
+                                          creoNuevaFila
+                                            ? valor.replace(/\n/g, "")
+                                            : valor,
+                                          reporte.nombreColeccion,
+                                        );
+
+                                        if (creoNuevaFila) {
+                                          agregarFilaAnomalia(
+                                            reporte.nombreColeccion,
+                                          );
+                                        }
+                                      }}
+                                      onInput={ajustarAlturaAnomalia}
+                                      onKeyDown={(event) => {
+                                        if (
+                                          event.key === "Enter" &&
+                                          indiceCampo ===
+                                            reporte.columnas.length - 1 &&
+                                          indiceGlobal ===
+                                            reporte.filas.length - 1
+                                        ) {
+                                          event.preventDefault();
+                                          agregarFilaAnomalia(
+                                            reporte.nombreColeccion,
+                                          );
+                                        }
+
+                                        if (
+                                          event.key === "Delete" &&
+                                          indiceCampo ===
+                                            reporte.columnas.length - 1
+                                        ) {
+                                          event.preventDefault();
+                                          eliminarFilaAnomalia(
+                                            indiceGlobal,
+                                            reporte.nombreColeccion,
+                                          );
+                                        }
+                                      }}
+                                      aria-label={`${etiqueta}, fila ${indiceGlobal + 1}`}
+                                    ></textarea>
+                                  </td>
+                                ),
                               )}
-                            </div>
-                            <textarea
-                              value={foto.descripcion || ""}
-                              placeholder="Descripción de la imagen..."
-                              onChange={(event) =>
-                                actualizarDescripcionFotografica(
-                                  indiceGlobal,
-                                  event.target.value,
-                                )
-                              }
-                              onKeyDown={(event) => {
-                                if (
-                                  event.key === "Enter" &&
-                                  indiceGlobal ===
-                                    registroFotografico.length - 1
-                                ) {
-                                  event.preventDefault();
-                                  agregarPaginaFotografica();
-                                }
-
-                                if (
-                                  (event.key === "Delete" ||
-                                    event.key === "Supr") &&
-                                  indiceGlobal ===
-                                    registroFotografico.length - 1
-                                ) {
-                                  event.preventDefault();
-                                  eliminarPaginaFotografica();
-                                }
-                              }}
-                              aria-label={`Descripción del registro ${indiceGlobal + 1}`}
-                            ></textarea>
-                          </div>
-                        );
-                      })}
-                    </div>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
                 </section>
+              );
+            })}
 
-                {indicePagina === paginasFotograficas.length - 1 &&
-                  paginasBloquesFinales.map((subBloques, idxPagina) => {
-                    const numeroPaginaFinal =
-                      paginasDescripcion.length +
-                      bloquesAnomalias.length +
-                      paginasFotograficas.length +
-                      idxPagina +
-                      1;
+            {paginasFotograficas.map((bloque, indicePagina) => {
+              const numeroPagina =
+                paginasDescripcion.length +
+                bloquesAnomalias.length +
+                indicePagina +
+                1;
+              const indiceInicial =
+                indicePagina * ESPACIOS_FOTOGRAFICOS_POR_HOJA;
 
-                    return (
-                      <section
-                        className="informe-hoja-pagina informe-hoja-final"
-                        key={`${informeActual.id}-final-${idxPagina}`}
-                      >
-                        {renderEncabezadoFinal(numeroPaginaFinal)}
+              return (
+                <Fragment
+                  key={`${informeActual.id}-registro-fotografico-${indicePagina}`}
+                >
+                  <section className="informe-hoja-pagina informe-hoja-fotografias">
+                    <table className="informe-encabezado registro-fotografico-encabezado">
+                      <tbody>
+                        <tr>
+                          <td rowSpan="4" className="encabezado-logo">
+                            <img src="/logo-emsa.png" alt="EMSA" />
+                          </td>
+                          <td className="encabezado-label">CÓDIGO:</td>
+                          <td className="encabezado-valor">EMSA-MTO-IF-01</td>
+                        </tr>
+                        <tr>
+                          <td className="encabezado-label">VERSIÓN:</td>
+                          <td className="encabezado-valor">01</td>
+                        </tr>
+                        <tr>
+                          <td className="encabezado-label">FECHA:</td>
+                          <td className="encabezado-valor">
+                            {formatearFecha(informeActual.fechaCreacion)}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td colSpan="2" className="encabezado-pagina">
+                            PÁGINA {numeroPagina} DE {totalPaginasInforme}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td className="encabezado-titulo-izquierdo">
+                            INFORME REPORTE DE
+                            <br />
+                            MANTENIMIENTO DIARIO
+                          </td>
+                          <td colSpan="2" className="encabezado-titulo-derecho">
+                            MANTENIMIENTO DEL
+                            <br />
+                            SISTEMA ELÉCTRICO
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
 
-                        {subBloques.map((sub) => {
-                          if (sub.tipo === "texto") {
-                            const esContinuacion = sub.chunkIndex > 0;
+                    <div className="registro-fotografico">
+                      <div className="registro-fotografico-titulo">
+                        REGISTRO FOTOGRÁFICO
+                      </div>
+                      <div className="registro-fotografico-cuadricula">
+                        {bloque.map((foto, indice) => {
+                          const indiceGlobal = indiceInicial + indice;
 
-                            return (
-                              <section
-                                className="bloque-final-informe"
-                                key={sub.id}
-                                data-bloque-final={sub.blockId}
-                              >
-                                <div>
-                                  {sub.titulo}
-                                  {esContinuacion && (
-                                    <span className="bloque-final-continuacion">
-                                      (continuación)
-                                    </span>
-                                  )}
-                                </div>
-                                <textarea
-                                  value={sub.chunk}
-                                  onChange={(event) => {
-                                    const nuevosChunks = [...sub.todasChunks];
-                                    nuevosChunks[sub.chunkIndex] =
-                                      event.target.value;
-
-                                    actualizarCampo(
-                                      sub.campo,
-                                      nuevosChunks.join("\n"),
-                                    );
-                                  }}
-                                  onInput={ajustarAlturaTextarea}
-                                  ref={(el) => {
-                                    if (el) {
-                                      el.style.height = "auto";
-                                      el.style.height = `${el.scrollHeight}px`;
+                          return (
+                            <div
+                              className="registro-fotografico-celda"
+                              key={`${informeActual.id}-foto-${indiceGlobal}`}
+                            >
+                              <div className="registro-fotografico-imagen">
+                                {foto.src ? (
+                                  <img
+                                    src={foto.src}
+                                    alt={`Registro fotográfico ${indiceGlobal + 1}`}
+                                    tabIndex="0"
+                                    className={
+                                      fotoRegistroSeleccionada === indiceGlobal
+                                        ? "registro-fotografico-imagen-seleccionada"
+                                        : ""
                                     }
-                                  }}
-                                ></textarea>
-                              </section>
-                            );
-                          }
+                                    onClick={(event) => {
+                                      event.currentTarget.focus();
+                                      setFotoRegistroSeleccionada(indiceGlobal);
+                                    }}
+                                    onKeyDown={(event) => {
+                                      if (
+                                        event.key === "Delete" ||
+                                        event.key === "Supr"
+                                      ) {
+                                        event.preventDefault();
+                                        eliminarImagenFotografica(indiceGlobal);
+                                      }
+                                    }}
+                                  />
+                                ) : (
+                                  <label className="registro-fotografico-cargar">
+                                    Agregar imagen
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      onChange={(event) =>
+                                        cargarImagenFotografica(
+                                          indiceGlobal,
+                                          event,
+                                        )
+                                      }
+                                    />
+                                  </label>
+                                )}
+                              </div>
+                              <textarea
+                                value={foto.descripcion || ""}
+                                placeholder="Descripción de la imagen..."
+                                onChange={(event) =>
+                                  actualizarDescripcionFotografica(
+                                    indiceGlobal,
+                                    event.target.value,
+                                  )
+                                }
+                                onKeyDown={(event) => {
+                                  if (
+                                    event.key === "Enter" &&
+                                    indiceGlobal ===
+                                      registroFotografico.length - 1
+                                  ) {
+                                    event.preventDefault();
+                                    agregarPaginaFotografica();
+                                  }
 
-                          if (sub.tipo === "tiempos") {
-                            return (
-                              <section
-                                className="bloque-final-informe bloque-tiempos"
-                                key={sub.id}
-                                data-bloque-final={sub.blockId}
-                              >
-                                <div>{sub.titulo}</div>
-                                <table>
-                                  <thead>
-                                    <tr>
-                                      {[
-                                        "SUBESTACIÓN",
-                                        "ACTIVIDADES",
-                                        "HORA INICIAL DESPLAZAMIENTO",
-                                        "HORA INICIAL ACTIVIDAD",
-                                        "HORA FINAL ACTIVIDAD",
-                                        "HORA FINAL DESPLAZAMIENTO",
-                                      ].map((titulo) => (
-                                        <th key={titulo}>{titulo}</th>
-                                      ))}
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {(informeActual.tiemposActividad || [{}])
-                                      .slice(0, 1)
-                                      .map((fila, indice) => (
-                                        <tr key={indice}>
-                                          {[
-                                            "subestacion",
-                                            "actividades",
-                                            "horaInicialDesplazamiento",
-                                            "horaInicialActividad",
-                                            "horaFinalActividad",
-                                            "horaFinalDesplazamiento",
-                                          ].map((campo) => (
-                                            <td key={campo}>
-                                              <textarea
-                                                value={fila[campo] || ""}
-                                                onChange={(event) =>
-                                                  actualizarCampoTiempo(
-                                                    indice,
-                                                    campo,
-                                                    event.target.value,
-                                                  )
-                                                }
-                                              ></textarea>
-                                            </td>
-                                          ))}
-                                        </tr>
-                                      ))}
-                                  </tbody>
-                                </table>
-                              </section>
-                            );
-                          }
-
-                          return null;
+                                  if (
+                                    (event.key === "Delete" ||
+                                      event.key === "Supr") &&
+                                    indiceGlobal ===
+                                      registroFotografico.length - 1
+                                  ) {
+                                    event.preventDefault();
+                                    eliminarPaginaFotografica();
+                                  }
+                                }}
+                                aria-label={`Descripción del registro ${indiceGlobal + 1}`}
+                              ></textarea>
+                            </div>
+                          );
                         })}
-                      </section>
-                    );
-                  })}
-              </Fragment>
-            );
-          })}
-        </div>
+                      </div>
+                    </div>
+                  </section>
+
+                  {indicePagina === paginasFotograficas.length - 1 &&
+                    paginasBloquesFinales.map((subBloques, idxPagina) => {
+                      const numeroPaginaFinal =
+                        paginasDescripcion.length +
+                        bloquesAnomalias.length +
+                        paginasFotograficas.length +
+                        idxPagina +
+                        1;
+
+                      return (
+                        <section
+                          className="informe-hoja-pagina informe-hoja-final"
+                          key={`${informeActual.id}-final-${idxPagina}`}
+                        >
+                          {renderEncabezadoFinal(numeroPaginaFinal)}
+
+                          {subBloques.map((sub) => {
+                            if (sub.tipo === "texto") {
+                              const esContinuacion = sub.chunkIndex > 0;
+
+                              return (
+                                <section
+                                  className="bloque-final-informe"
+                                  key={sub.id}
+                                  data-bloque-final={sub.blockId}
+                                >
+                                  <div>
+                                    {sub.titulo}
+                                    {esContinuacion && (
+                                      <span className="bloque-final-continuacion">
+                                        (continuación)
+                                      </span>
+                                    )}
+                                  </div>
+                                  <textarea
+                                    value={sub.chunk}
+                                    onChange={(event) => {
+                                      const nuevosChunks = [...sub.todasChunks];
+                                      nuevosChunks[sub.chunkIndex] =
+                                        event.target.value;
+
+                                      actualizarCampo(
+                                        sub.campo,
+                                        nuevosChunks.join("\n"),
+                                      );
+                                    }}
+                                    onInput={ajustarAlturaTextarea}
+                                    ref={(el) => {
+                                      if (el) {
+                                        el.style.height = "auto";
+                                        el.style.height = `${el.scrollHeight}px`;
+                                      }
+                                    }}
+                                  ></textarea>
+                                </section>
+                              );
+                            }
+
+                            if (sub.tipo === "tiempos") {
+                              return (
+                                <section
+                                  className="bloque-final-informe bloque-tiempos"
+                                  key={sub.id}
+                                  data-bloque-final={sub.blockId}
+                                >
+                                  <div>{sub.titulo}</div>
+                                  <table>
+                                    <thead>
+                                      <tr>
+                                        {[
+                                          "SUBESTACIÓN",
+                                          "ACTIVIDADES",
+                                          "HORA INICIAL DESPLAZAMIENTO",
+                                          "HORA INICIAL ACTIVIDAD",
+                                          "HORA FINAL ACTIVIDAD",
+                                          "HORA FINAL DESPLAZAMIENTO",
+                                        ].map((titulo) => (
+                                          <th key={titulo}>{titulo}</th>
+                                        ))}
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {(informeActual.tiemposActividad || [{}])
+                                        .slice(0, 1)
+                                        .map((fila, indice) => (
+                                          <tr key={indice}>
+                                            {[
+                                              "subestacion",
+                                              "actividades",
+                                              "horaInicialDesplazamiento",
+                                              "horaInicialActividad",
+                                              "horaFinalActividad",
+                                              "horaFinalDesplazamiento",
+                                            ].map((campo) => (
+                                              <td key={campo}>
+                                                <textarea
+                                                  value={fila[campo] || ""}
+                                                  onChange={(event) =>
+                                                    actualizarCampoTiempo(
+                                                      indice,
+                                                      campo,
+                                                      event.target.value,
+                                                    )
+                                                  }
+                                                ></textarea>
+                                              </td>
+                                            ))}
+                                          </tr>
+                                        ))}
+                                    </tbody>
+                                  </table>
+                                </section>
+                              );
+                            }
+
+                            return null;
+                          })}
+                        </section>
+                      );
+                    })}
+                </Fragment>
+              );
+            })}
+          </div>
+        </fieldset>
       </div>
     );
   }
@@ -4169,16 +4409,54 @@ function Informes() {
       </div>
 
       <div className="informes-seleccion-barra">
-        <span>
-          {descargandoPdf
-            ? `⏳ Descargando PDF ${progresoDescargaPdf.actual} de ${progresoDescargaPdf.total}...`
-            : informesSeleccionados.length
-              ? `${informesSeleccionados.length} informe(s) seleccionado(s)`
-              : "Seleccione uno o varios informes para descargarlos en PDF."}
-        </span>
+        <div className="informes-seleccion-info">
+          <span className="informes-seleccion-titulo">
+            {descargandoPdf
+              ? faseDescarga === "verificando"
+                ? `Verificando ${progresoDescargaPdf.total} informe(s)...`
+                : faseDescarga === "descargando"
+                  ? `Descargando PDF ${progresoDescargaPdf.actual} de ${progresoDescargaPdf.total}...`
+                  : faseDescarga === "generando"
+                    ? "Preparando generación de PDFs faltantes..."
+                    : "Procesando..."
+              : informesSeleccionados.length
+                ? `${informesSeleccionados.length} informe(s) seleccionado(s)`
+                : "Seleccione uno o varios informes para descargarlos en PDF."}
+          </span>
+
+          {descargandoPdf && faseDescarga === "descargando" && (
+            <span className="informes-seleccion-hint">
+              💡 Las descargas aparecerán automáticamente en la barra de
+              descargas de tu navegador.
+            </span>
+          )}
+        </div>
+
+        {descargandoPdf &&
+          faseDescarga === "descargando" &&
+          progresoDescargaPdf.total > 0 && (
+            <div
+              className="informes-seleccion-progreso"
+              role="progressbar"
+              aria-valuenow={progresoDescargaPdf.actual}
+              aria-valuemin={0}
+              aria-valuemax={progresoDescargaPdf.total}
+            >
+              <div
+                className="informes-seleccion-progreso-fill"
+                style={{
+                  width: `${
+                    (progresoDescargaPdf.actual / progresoDescargaPdf.total) *
+                    100
+                  }%`,
+                }}
+              />
+            </div>
+          )}
+
         <button
           type="button"
-          className="btn-tabla"
+          className="btn-tabla informes-btn-descargar"
           disabled={
             !informesSeleccionados.length ||
             descargandoPdf ||
@@ -4186,11 +4464,20 @@ function Informes() {
           }
           onClick={descargarInformesSeleccionados}
         >
-          {descargandoPdf
-            ? "⏳ Descargando..."
-            : generandoPdfLote.activo
-              ? "⏳ Generando..."
-              : "Descargar PDF"}
+          {descargandoPdf ? (
+            <>
+              <span className="informes-seleccion-spinner" aria-hidden="true" />
+              {faseDescarga === "verificando"
+                ? "Verificando..."
+                : faseDescarga === "descargando"
+                  ? `Descargando ${progresoDescargaPdf.actual}/${progresoDescargaPdf.total}...`
+                  : "Procesando..."}
+            </>
+          ) : generandoPdfLote.activo ? (
+            <>⏳ Generando...</>
+          ) : (
+            <>⬇ Descargar PDF</>
+          )}
         </button>
       </div>
 
@@ -4229,6 +4516,7 @@ function Informes() {
                 <th>OT</th>
                 <th>Subestación</th>
                 <th>Cuadrilla</th>
+                <th>Estado</th>
                 <th>Acciones</th>
               </tr>
             </thead>
@@ -4279,6 +4567,13 @@ function Informes() {
                         informe.actividadSnapshot?.cuadrillaId ||
                         "Sin asignar"}
                     </td>
+                    <td>
+                      <span
+                        className={`informe-estado-badge estado-${(informe.estado || "Borrador").toLowerCase()}`}
+                      >
+                        {informe.estado || "Borrador"}
+                      </span>
+                    </td>
 
                     <td>
                       <div className="acciones-informe">
@@ -4310,39 +4605,34 @@ function Informes() {
       </div>
 
       {generandoPdfLote.activo && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.55)",
-            zIndex: 9999,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <div
-            style={{
-              background: "#ffffff",
-              color: "#2648af",
-              padding: "30px 50px",
-              borderRadius: "12px",
-              boxShadow: "0 10px 40px rgba(0,0,0,0.3)",
-              textAlign: "center",
-              fontSize: "16px",
-              fontWeight: "600",
-            }}
-          >
+        <div className="informes-modal-generacion-overlay">
+          <div className="informes-modal-generacion">
+            <div className="informes-modal-generacion-icono">📄</div>
+            <div className="informes-modal-generacion-titulo">
+              Generando PDFs faltantes
+            </div>
+            <div className="informes-modal-generacion-contador">
+              {generandoPdfLote.actual} de {generandoPdfLote.total}
+            </div>
             <div
-              style={{ fontSize: "14px", color: "#666", marginBottom: "8px" }}
+              className="informes-modal-generacion-progreso"
+              role="progressbar"
+              aria-valuenow={generandoPdfLote.actual}
+              aria-valuemin={0}
+              aria-valuemax={generandoPdfLote.total}
             >
-              Generando PDF
+              <div
+                className="informes-modal-generacion-progreso-fill"
+                style={{
+                  width: `${
+                    (generandoPdfLote.actual / generandoPdfLote.total) * 100
+                  }%`,
+                }}
+              />
             </div>
-            <div style={{ fontSize: "22px", marginBottom: "6px" }}>
-              {generandoPdfLote.actual + 1} / {generandoPdfLote.total}
-            </div>
-            <div style={{ fontSize: "12px", color: "#999" }}>
-              Por favor no cierres esta pestaña
+            <div className="informes-modal-generacion-hint">
+              ⚠️ Por favor no cierres esta pestaña. Los PDFs se descargarán
+              automáticamente al finalizar cada uno.
             </div>
           </div>
         </div>

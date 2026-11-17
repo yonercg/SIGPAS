@@ -2984,3 +2984,272 @@
 .btn-crear-informe-actividad:hover {
   background: #155632;
 }
+
+/* =========================================================
+   DESCARGA MASIVA DE INFORMES — BARRA DE PROGRESO
+   ========================================================= */
+
+.informes-seleccion-barra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  margin-bottom: 12px;
+  min-height: auto;
+}
+
+.informes-seleccion-info {
+  flex: 1 1 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.informes-seleccion-titulo {
+  font-weight: 600;
+  color: #1e40af;
+  font-size: 13px;
+}
+
+.informes-seleccion-hint {
+  font-size: 11px;
+  color: #3b82f6;
+  font-style: italic;
+  line-height: 1.3;
+}
+
+.informes-seleccion-progreso {
+  flex: 1 1 100%;
+  height: 6px;
+  background: #dbeafe;
+  border-radius: 999px;
+  overflow: hidden;
+  position: relative;
+}
+
+.informes-seleccion-progreso-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #2563eb, #60a5fa);
+  border-radius: 999px;
+  transition: width 0.35s ease;
+  box-shadow: 0 0 8px rgba(37, 99, 235, 0.35);
+}
+
+.informes-btn-descargar {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 8px;
+  background: #2563eb !important;
+  color: #ffffff !important;
+  border-color: #2563eb !important;
+  font-weight: 600 !important;
+  padding: 8px 16px !important;
+}
+
+.informes-btn-descargar:hover:not(:disabled) {
+  background: #1d4ed8 !important;
+  border-color: #1d4ed8 !important;
+}
+
+.informes-btn-descargar:disabled {
+  background: #93c5fd !important;
+  border-color: #93c5fd !important;
+  color: #ffffff !important;
+  cursor: progress !important;
+  opacity: 0.9 !important;
+}
+
+.informes-seleccion-spinner {
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  border: 2px solid rgba(255, 255, 255, 0.45);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: informes-spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes informes-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* =========================================================
+   MODAL DE GENERACIÓN DE PDFs FALTANTES
+   ========================================================= */
+
+.informes-modal-generacion-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(2px);
+}
+
+.informes-modal-generacion {
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 28px 40px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+  text-align: center;
+  min-width: 320px;
+  max-width: 420px;
+}
+
+.informes-modal-generacion-icono {
+  font-size: 32px;
+  margin-bottom: 6px;
+}
+
+.informes-modal-generacion-titulo {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1e40af;
+  margin-bottom: 4px;
+}
+
+.informes-modal-generacion-contador {
+  font-size: 24px;
+  font-weight: 800;
+  color: #1d4ed8;
+  margin-bottom: 12px;
+}
+
+.informes-modal-generacion-progreso {
+  height: 8px;
+  background: #dbeafe;
+  border-radius: 999px;
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+
+.informes-modal-generacion-progreso-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #2563eb, #60a5fa);
+  border-radius: 999px;
+  transition: width 0.4s ease;
+  box-shadow: 0 0 10px rgba(37, 99, 235, 0.4);
+}
+
+.informes-modal-generacion-hint {
+  font-size: 11.5px;
+  color: #6b7280;
+  line-height: 1.4;
+}
+/* =========================================================
+   ESTADO DEL INFORME (BORRADOR / CERRADO)
+   ========================================================= */
+
+.informe-status-select {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  outline: none;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  color: #374151;
+  transition: all 0.2s ease;
+}
+
+.informe-status-select.status-borrador {
+  background: #fef3c7;
+  color: #92400e;
+  border-color: #fcd34d;
+}
+
+.informe-status-select.status-cerrado {
+  background: #dcfce7;
+  color: #166534;
+  border-color: #86efac;
+}
+
+/* Badge para la tabla */
+.informe-estado-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.informe-estado-badge.estado-borrador {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.informe-estado-badge.estado-cerrado {
+  background: #dcfce7;
+  color: #166534;
+}
+
+/* Bloqueo visual del documento */
+.informe-fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+  width: 100%;
+}
+
+.informe-bloqueado input:disabled,
+.informe-bloqueado textarea:disabled,
+.informe-bloqueado select:disabled {
+  background-color: #f9fafb !important;
+  color: #6b7280 !important;
+  cursor: not-allowed;
+}
+
+.informe-bloqueado .descripcion-editor {
+  background-color: #f9fafb;
+  cursor: not-allowed;
+}
+
+/* Ocultar el cursor en textareas y contenteditables bloqueados */
+.informe-bloqueado textarea:disabled {
+  -webkit-text-fill-color: #6b7280;
+}
+/* =========================================================
+   BLOQUEO SIN CAMBIOS VISUALES (INFORME CERRADO)
+   ========================================================= */
+
+/* 1. Evitar que el navegador aplique su tono gris nativo a los campos deshabilitados */
+.informe-bloqueado input:disabled,
+.informe-bloqueado textarea:disabled,
+.informe-bloqueado select:disabled {
+  background-color: transparent !important;
+  color: #111111 !important;
+  -webkit-text-fill-color: #111111 !important;
+  opacity: 1 !important;
+  cursor: default !important;
+}
+
+/* 2. Mantener el aspecto normal en el editor de texto enriquecido */
+.informe-bloqueado .descripcion-editor {
+  background-color: transparent !important;
+  color: #111111 !important;
+  cursor: default !important;
+}
+
+/* 3. Ocultar botones de acción para que no confundan (subir fotos, firmas, etc.) */
+.informe-bloqueado .registro-fotografico-cargar,
+.informe-bloqueado .cargar-firma-digital,
+.informe-bloqueado .btn-eliminar-foto,
+.informe-bloqueado .btn-eliminar-imagen-editor {
+  display: none !important;
+}

@@ -7,11 +7,13 @@ import { supabase } from "../lib/supabase";
 import "./Actividades.css";
 import { useAuth } from "../context/AuthContext";
 import { cargarCambiosManuales } from "../lib/configuracion";
+import { registrarAuditoria } from "../lib/auditoria"; // 🆕 IMPORT AGREGADO
 
 function Actividades() {
   const navigate = useNavigate();
-  const { esAdmin, esCuadrilla, cuadrillaUsuario } = useAuth();
 
+  // 🆕 AGREGADO usuarioActual AQUÍ
+  const { esAdmin, esCuadrilla, cuadrillaUsuario, usuarioActual } = useAuth();
   // =========================================
   // ACTIVIDADES DESDE EL CONTEXT
   // =========================================
@@ -76,6 +78,9 @@ function Actividades() {
   // =========================================
 
   const [informesCreados, setInformesCreados] = useState([]);
+
+  // 🆕 Anexos por actividad (para badges del menú Documentos)
+  const [anexosCreados, setAnexosCreados] = useState([]);
 
   // =========================================
   // FECHA BASE
@@ -351,35 +356,63 @@ function Actividades() {
   useEffect(() => {
     let activo = true;
 
-    const cargarInformes = async () => {
-      try {
-        const { data, error } = await supabase
-          .from("informes")
-          .select("id, metadatos");
+    const cargarDocumentos = async () => {
+      // 🔹 allSettled: cada consulta es independiente.
+      //    Si "anexos" falla (tabla no creada, RLS, red), "informes"
+      //    sigue funcionando y viceversa.
+      const [resInformes, resAnexos] = await Promise.allSettled([
+        supabase.from("informes").select("id, metadatos"),
+        supabase.from("anexos").select("id, actividad_id"),
+      ]);
 
-        if (!activo) return;
+      if (!activo) return;
 
+      // --- Informes ---
+      if (resInformes.status === "fulfilled") {
+        const { data, error } = resInformes.value;
         if (error) {
-          console.error("Error cargando informes para el check:", error);
+          console.error("Error cargando informes:", error);
           setInformesCreados([]);
-          return;
+        } else {
+          setInformesCreados(
+            (data || []).map((fila) => ({
+              id: fila.id,
+              actividadId: fila.metadatos?.actividadId ?? null,
+            })),
+          );
         }
+      } else {
+        console.error("Error inesperado informes:", resInformes.reason);
+        setInformesCreados([]);
+      }
 
-        setInformesCreados(
-          (data || []).map((fila) => ({
-            id: fila.id,
-            actividadId: fila.metadatos?.actividadId ?? null,
-          })),
-        );
-      } catch (err) {
-        console.error("Error inesperado cargando informes:", err);
-        if (activo) setInformesCreados([]);
+      // --- Anexos ---
+      if (resAnexos.status === "fulfilled") {
+        const { data, error } = resAnexos.value;
+        if (error) {
+          // Si la tabla no existe aún, es esperado: no romper nada.
+          console.warn(
+            "Error cargando anexos (posible tabla sin crear):",
+            error,
+          );
+          setAnexosCreados([]);
+        } else {
+          setAnexosCreados(
+            (data || []).map((fila) => ({
+              id: fila.id,
+              actividadId: fila.actividad_id,
+            })),
+          );
+        }
+      } else {
+        console.warn("Error inesperado anexos:", resAnexos.reason);
+        setAnexosCreados([]);
       }
     };
 
-    cargarInformes();
+    cargarDocumentos();
 
-    const refrescar = () => cargarInformes();
+    const refrescar = () => cargarDocumentos();
     window.addEventListener("focus", refrescar);
 
     return () => {
@@ -709,7 +742,23 @@ function Actividades() {
       }
       return true;
     })
-    .filter((actividad) => cumpleFiltros(actividad));
+    .filter((actividad) => cumpleFiltros(actividad))
+    // 🆕 Orden descendente por fecha: la más reciente arriba.
+    //    Las que no tienen fecha válida quedan al final.
+    .sort((a, b) => {
+      const fechaA = obtenerFecha(a.fecha);
+      const fechaB = obtenerFecha(b.fecha);
+
+      if (!fechaA && !fechaB) return 0;
+      if (!fechaA) return 1;
+      if (!fechaB) return -1;
+
+      const difFecha = fechaB.getTime() - fechaA.getTime();
+      if (difFecha !== 0) return difFecha;
+
+      // Desempate: código OT descendente
+      return String(b.codigoOT || "").localeCompare(String(a.codigoOT || ""));
+    });
 
   // =========================================
   // OPCIONES DE SEMANA
@@ -862,6 +911,7 @@ function Actividades() {
     const rect = elementoBoton.getBoundingClientRect();
 
     const anchoMenu = 235;
+    const altoMenuEstimado = 180; // Altura aproximada del menú con 3 opciones
 
     let left = rect.right - anchoMenu;
 
@@ -869,15 +919,18 @@ function Actividades() {
       left = 10;
     }
 
-    if (left + anchoMenu > window.innerWidth - 10) {
-      left = window.innerWidth - anchoMenu - 10;
+    const anchoVentana = document.documentElement.clientWidth;
+    if (left + anchoMenu > anchoVentana - 10) {
+      left = anchoVentana - anchoMenu - 10;
     }
 
-    setPosicionDocumentos({
-      top: rect.bottom + 7,
-      left,
-    });
+    // 2. Posición vertical (evitar que se salga por abajo)
+    let top = rect.bottom + 7;
+    if (top + altoMenuEstimado > window.innerHeight - 10) {
+      top = rect.top - altoMenuEstimado - 7; // Abrir hacia arriba si no cabe abajo
+    }
 
+    setPosicionDocumentos({ top, left });
     setActividadDocumentos(actividad);
   };
 
@@ -904,8 +957,33 @@ function Actividades() {
 
       return;
     }
+    registrarAuditoria(usuarioActual, "Actividades", "Abrir Documento", {
+      actividad: actividad.nombre,
+      tipo: "Informe",
+    });
 
     navigate(`/informes?actividadId=${encodeURIComponent(actividad.id)}`);
+  };
+
+  // =========================================
+  // ABRIR ANEXOS
+  // =========================================
+
+  const abrirAnexos = (actividad) => {
+    cerrarDocumentos();
+
+    if (!actividad?.id) {
+      alert(
+        "No se pueden abrir los anexos porque esta actividad no tiene un identificador.",
+      );
+      return;
+    }
+
+    registrarAuditoria(usuarioActual, "Actividades", "Abrir Documento", {
+      actividad: actividad.nombre,
+      tipo: "Anexos",
+    });
+    navigate(`/anexos?actividadId=${encodeURIComponent(actividad.id)}`);
   };
 
   // =========================================
@@ -922,6 +1000,10 @@ function Actividades() {
 
       return;
     }
+    registrarAuditoria(usuarioActual, "Actividades", "Abrir Documento", {
+      actividad: actividad.nombre,
+      tipo: "Informe",
+    });
 
     navigate(`/ot?actividadId=${encodeURIComponent(actividad.id)}`);
   };
@@ -944,6 +1026,14 @@ function Actividades() {
     ).length;
   };
 
+  // 🆕 Conteo de anexos
+  const obtenerCantidadAnexos = (actividadId) => {
+    if (!actividadId) return 0;
+    return anexosCreados.filter(
+      (anexo) => String(anexo.actividadId ?? "") === String(actividadId),
+    ).length;
+  };
+
   const tieneOrdenTrabajoCreada = (actividadId) => {
     if (!actividadId) {
       return false;
@@ -960,10 +1050,12 @@ function Actividades() {
 
   const obtenerDocumentosActividad = (actividad) => {
     const cantidadInformes = obtenerCantidadInformes(actividad?.id);
+    const cantidadAnexos = obtenerCantidadAnexos(actividad?.id);
     const ordenTrabajo = tieneOrdenTrabajoCreada(actividad?.id);
 
     return {
       cantidadInformes,
+      cantidadAnexos, // 🆕
       ordenTrabajo,
       completos: cantidadInformes > 0 && ordenTrabajo,
     };
@@ -1473,6 +1565,7 @@ function Actividades() {
 
                 return (
                   <>
+                    {/* 1) INFORMES */}
                     <button
                       className="documento-opcion"
                       type="button"
@@ -1504,6 +1597,7 @@ function Actividades() {
                       )}
                     </button>
 
+                    {/* 2) ORDEN DE TRABAJO */}
                     <button
                       className="documento-opcion"
                       type="button"
@@ -1529,6 +1623,38 @@ function Actividades() {
                           aria-label="Orden de trabajo creada"
                         >
                           ✓
+                        </span>
+                      )}
+                    </button>
+
+                    {/* 3) ANEXOS */}
+                    <button
+                      className="documento-opcion"
+                      type="button"
+                      role="menuitem"
+                      onClick={() => abrirAnexos(actividadDocumentos)}
+                    >
+                      <span
+                        className="documento-opcion-icono"
+                        aria-hidden="true"
+                      >
+                        📎
+                      </span>
+
+                      <span className="documento-opcion-contenido">
+                        <strong>
+                          Anexos{" "}
+                          {docs.cantidadAnexos > 0
+                            ? `(${docs.cantidadAnexos})`
+                            : ""}
+                        </strong>
+
+                        <small>Subir o consultar archivos adjuntos</small>
+                      </span>
+
+                      {docs.cantidadAnexos > 0 && (
+                        <span className="documento-opcion-check">
+                          {docs.cantidadAnexos}
                         </span>
                       )}
                     </button>

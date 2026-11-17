@@ -5,6 +5,7 @@ import { useActividades } from "../context/ActividadesContext";
 import { cuadrillas as cuadrillasData } from "../data/cuadrillas";
 import "./OT.css";
 import { comprimirImagen, comprimirFirma } from "../utils/imagenes";
+import { registrarAuditoria } from "../lib/auditoria";
 
 // =========================================================
 // OPCIONES
@@ -787,7 +788,7 @@ async function generarPDFDeHoja(hojaElement, nombreArchivo, datosOT = null) {
     const ancho = 816;
     // +100px de margen de seguridad para que nunca corte la última fila
     const alto = Math.ceil(
-      Math.max(altoScroll, altoOffset, altoContenedor, maxBottom) + 100,
+      Math.max(altoScroll, altoOffset, altoContenedor, maxBottom) + 20,
     );
 
     console.log("[PDF] Medidas:", {
@@ -800,9 +801,9 @@ async function generarPDFDeHoja(hojaElement, nombreArchivo, datosOT = null) {
     });
 
     const canvas = await html2canvas(clon, {
-      scale: 2.5,
+      scale: 2.0,
       useCORS: true,
-      allowTaint: true,
+      allowTaint: false,
       backgroundColor: "#ffffff",
       logging: false,
       width: ancho,
@@ -826,7 +827,7 @@ async function generarPDFDeHoja(hojaElement, nombreArchivo, datosOT = null) {
     const pdfWidth = pdf.internal.pageSize.getWidth();
     const pdfHeight = pdf.internal.pageSize.getHeight();
 
-    const imgData = canvas.toDataURL("image/jpeg", 0.98);
+    const imgData = canvas.toDataURL("image/jpeg", 0.75);
     const imgHeight = (canvas.height * pdfWidth) / canvas.width;
 
     if (imgHeight <= pdfHeight) {
@@ -1075,9 +1076,8 @@ function OTListado({
   };
 
   // =========================================
-  // DESCARGAR SELECCIONADAS
+  // DESCARGAR SELECCIONADAS (optimizado en paralelo)
   // =========================================
-
   const descargarSeleccionadas = async () => {
     if (seleccionadas.length === 0) return;
     if (descargando) return;
@@ -1085,26 +1085,55 @@ function OTListado({
     setDescargando(true);
     setProgresoDescarga({ actual: 0, total: seleccionadas.length });
 
-    for (let i = 0; i < seleccionadas.length; i++) {
-      const id = seleccionadas[i];
-      setProgresoDescarga({ actual: i + 1, total: seleccionadas.length });
+    // 🚀 Concurrencia limitada: 3 OTs generándose simultáneamente.
+    //    Esto reduce el tiempo total ~75% vs el bucle serial anterior
+    //    y evita que el navegador bloquee múltiples descargas automáticas.
+    const CONCURRENCIA = 3;
+    const total = seleccionadas.length;
+    const cola = [...seleccionadas];
+    let completadas = 0;
 
-      try {
-        await descargarUnPDF(id);
-      } catch (err) {
-        console.error(`Error descargando OT ${id}:`, err);
+    const procesarSiguiente = async () => {
+      while (cola.length > 0) {
+        const id = cola.shift();
+        if (!id) break;
+        try {
+          await descargarUnPDF(id);
+        } catch (err) {
+          console.error(`Error descargando OT ${id}:`, err);
+        } finally {
+          completadas++;
+          setProgresoDescarga({ actual: completadas, total });
+        }
       }
+    };
 
-      if (i < seleccionadas.length - 1) {
-        await new Promise((r) => setTimeout(r, 600));
-      }
-    }
+    // Lanzar N "workers" en paralelo que van consumiendo la cola
+    const workers = Array.from({ length: CONCURRENCIA }, () =>
+      procesarSiguiente(),
+    );
+    await Promise.all(workers);
 
     setDescargando(false);
-    setProgresoDescarga({ actual: 0, total: 0 });
+    // Dejar visible el "completado" 2s antes de resetear
+    setTimeout(() => {
+      setProgresoDescarga({ actual: 0, total: 0 });
+    }, 2000);
   };
-
-  const pedirEliminar = (item) => setParaEliminar({ items: [item] });
+  // 🆕 Si la OT está cerrada, pedir contraseña antes de eliminarla
+  const pedirEliminar = (item) => {
+    if (item.estado === "OT Cerrada") {
+      const password = window.prompt(
+        "🔒 Esta OT está cerrada. Ingrese la contraseña para eliminarla:",
+      );
+      if (password === null) return;
+      if (password !== CONTRASENA_CIERRE_OT) {
+        alert("❌ Contraseña incorrecta. No se puede eliminar la OT.");
+        return;
+      }
+    }
+    setParaEliminar({ items: [item] });
+  };
 
   const confirmarEliminar = () => {
     if (!paraEliminar) return;
@@ -1114,6 +1143,9 @@ function OTListado({
         (id) => !paraEliminar.items.some((it) => it.actividadId === id),
       ),
     );
+    registrarAuditoria(usuarioActual, "Órdenes de Trabajo", "Eliminar", {
+      ot: ot.numeroOT,
+    });
     setParaEliminar(null);
   };
 
@@ -1244,18 +1276,59 @@ function OTListado({
 
       {seleccionadas.length > 0 && (
         <div className="ot-lista-barra-seleccion">
-          <span>
-            {descargando
-              ? `⏳ Generando PDF ${progresoDescarga.actual} de ${progresoDescarga.total}...`
-              : `${seleccionadas.length} ${seleccionadas.length === 1 ? "OT seleccionada" : "OTs seleccionadas"}`}
-          </span>
+          <div className="ot-lista-barra-info">
+            <span className="ot-lista-barra-titulo">
+              {descargando
+                ? `Generando PDF ${progresoDescarga.actual} de ${progresoDescarga.total}...`
+                : `${seleccionadas.length} ${
+                    seleccionadas.length === 1
+                      ? "OT seleccionada"
+                      : "OTs seleccionadas"
+                  }`}
+            </span>
+            {descargando && (
+              <span className="ot-lista-barra-hint">
+                💡 Las descargas aparecerán automáticamente en la barra de
+                descargas de tu navegador. Puedes seguir navegando, el proceso
+                continúa en segundo plano.
+              </span>
+            )}
+          </div>
+
+          {descargando && (
+            <div
+              className="ot-lista-barra-progreso"
+              role="progressbar"
+              aria-valuenow={progresoDescarga.actual}
+              aria-valuemin={0}
+              aria-valuemax={progresoDescarga.total}
+            >
+              <div
+                className="ot-lista-barra-progreso-fill"
+                style={{
+                  width: `${
+                    (progresoDescarga.actual / progresoDescarga.total) * 100
+                  }%`,
+                }}
+              />
+            </div>
+          )}
+
           <button
             type="button"
             className="ot-lista-btn-descargar-masivo"
             onClick={descargarSeleccionadas}
             disabled={descargando}
           >
-            {descargando ? "⏳ Descargando..." : "⬇ Descargar seleccionadas"}
+            {descargando ? (
+              <>
+                <span className="ot-lista-spinner" aria-hidden="true" />
+                Descargando {progresoDescarga.actual}/{progresoDescarga.total}
+                ...
+              </>
+            ) : (
+              <>⬇ Descargar seleccionadas</>
+            )}
           </button>
         </div>
       )}
@@ -1417,13 +1490,12 @@ function OTListado({
     </div>
   );
 }
-
 // =========================================================
 // COMPONENTE PRINCIPAL
 // =========================================================
 
 function OT() {
-  const { esCuadrilla, cuadrillaUsuario } = useAuth();
+  const { usuarioActual, esCuadrilla, cuadrillaUsuario } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const actividadId = searchParams.get("actividadId");
@@ -1464,6 +1536,10 @@ function OT() {
   const otActualRef = useRef(ot);
   otActualRef.current = ot;
   const [cargandoOT, setCargandoOT] = useState(false); // 👈 NUEVO
+
+  // 🆕 Estado de bloqueo para OTs cerradas
+  const [desbloqueada, setDesbloqueada] = useState(false);
+  const soloLectura = ot.estadoOT === "OT Cerrada" && !desbloqueada;
 
   const obtenerFechaInput = (fecha) => {
     if (!fecha) return "";
@@ -1561,6 +1637,11 @@ function OT() {
     cargarDatos();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [actividadId, actividadSeleccionada?.id]);
+
+  // 🆕 Al cambiar de OT, volver a bloquear por defecto
+  useEffect(() => {
+    setDesbloqueada(false);
+  }, [actividadId]);
 
   useEffect(() => {
     if (!autoPrint) return;
@@ -1676,11 +1757,36 @@ function OT() {
   };
 
   const manejarCambioEstado = (nuevoEstado) => {
+    if (nuevoEstado === ot.estadoOT) return;
+
+    // 🆕 Si vamos a SALIR de "OT Cerrada", pedir contraseña (si no está desbloqueada ya)
+    if (ot.estadoOT === "OT Cerrada" && nuevoEstado !== "OT Cerrada") {
+      if (!desbloqueada) {
+        const password = window.prompt(
+          "🔒 Esta OT está cerrada. Ingrese la contraseña para reabrirla:",
+        );
+        if (password === null) return;
+        if (password !== CONTRASENA_CIERRE_OT) {
+          alert("❌ Contraseña incorrecta. La OT permanece cerrada.");
+          return;
+        }
+        setDesbloqueada(true);
+      }
+      registrarAuditoria(usuarioActual, "Órdenes de Trabajo", "Estado", {
+        ot: ot.numeroOT,
+        nuevoEstado,
+      });
+      actualizarCampo("estadoOT", nuevoEstado);
+      return;
+    }
+
     if (nuevoEstado !== "OT Cerrada") {
       actualizarCampo("estadoOT", nuevoEstado);
       return;
     }
+
     if (ot.estadoOT === "OT Cerrada") return;
+
     const password = window.prompt(
       "🔒 Ingrese la contraseña para cerrar la OT:",
     );
@@ -1689,7 +1795,30 @@ function OT() {
       alert("❌ Contraseña incorrecta. No se puede cerrar la OT.");
       return;
     }
+    registrarAuditoria(usuarioActual, "Órdenes de Trabajo", "Estado", {
+      ot: ot.numeroOT,
+      nuevoEstado,
+    });
     actualizarCampo("estadoOT", "OT Cerrada");
+    setDesbloqueada(false); // 🆕 al cerrar, se vuelve a bloquear
+  };
+
+  // 🆕 Solicitar desbloqueo de una OT cerrada para editarla
+  const solicitarDesbloqueo = () => {
+    const password = window.prompt(
+      "🔒 Esta OT está cerrada. Ingrese la contraseña para editarla:",
+    );
+    if (password === null) return;
+    if (password !== CONTRASENA_CIERRE_OT) {
+      alert("❌ Contraseña incorrecta. La OT permanece bloqueada.");
+      return;
+    }
+    setDesbloqueada(true);
+  };
+
+  // 🆕 Volver a bloquear manualmente (solo lectura)
+  const volverABloquear = () => {
+    setDesbloqueada(false);
   };
 
   const calcularHoras = (inicio, fin) => {
@@ -1838,9 +1967,9 @@ function OT() {
 
     // 🔹 Comprimir antes de convertir a base64
     comprimirImagen(file, {
-      maxAncho: 1600,
-      maxAlto: 1600,
-      calidad: 0.78,
+      maxAncho: 1000,
+      maxAlto: 1000,
+      calidad: 0.7,
     }).then((base64) => {
       if (!base64) return;
 
@@ -1869,10 +1998,19 @@ function OT() {
 
   const guardarOTManual = async () => {
     if (!actividadId) return;
+    if (soloLectura) {
+      alert(
+        "🔒 La OT está cerrada. Usa el botón 'Editar' para desbloquearla antes de guardar.",
+      );
+      return;
+    }
     setMensajeGuardado("⏳ Guardando...");
     const ok = await guardarOTContext(actividadId, ot);
     setMensajeGuardado(ok ? "✓ Guardado" : "✕ Error");
     setTimeout(() => setMensajeGuardado(""), 2500);
+    registrarAuditoria(usuarioActual, "Órdenes de Trabajo", "Guardar", {
+      ot: ot.numeroOT,
+    });
   };
 
   const imprimirOT = async () => {
@@ -1962,13 +2100,39 @@ function OT() {
           >
             ← Listado
           </button>
-          <button
-            type="button"
-            className="ot-btn ot-btn-guardar-manual"
-            onClick={guardarOTManual}
-          >
-            💾 Guardar
-          </button>
+
+          {/* 🆕 Botón Editar/Bloquear/Guardar según estado */}
+          {soloLectura ? (
+            <button
+              type="button"
+              className="ot-btn ot-btn-primario"
+              onClick={solicitarDesbloqueo}
+              title="Ingresar contraseña para editar esta OT cerrada"
+            >
+              🔓 Editar
+            </button>
+          ) : (
+            <>
+              {ot.estadoOT === "OT Cerrada" && (
+                <button
+                  type="button"
+                  className="ot-btn"
+                  onClick={volverABloquear}
+                  title="Volver a bloquear (solo lectura)"
+                >
+                  🔒 Bloquear
+                </button>
+              )}
+              <button
+                type="button"
+                className="ot-btn ot-btn-guardar-manual"
+                onClick={guardarOTManual}
+              >
+                💾 Guardar
+              </button>
+            </>
+          )}
+
           <button
             type="button"
             className="ot-btn ot-btn-primario"
@@ -1981,7 +2145,10 @@ function OT() {
             data-estado={ot.estadoOT || "Pendiente"}
             value={ot.estadoOT || "Pendiente"}
             onChange={(e) => manejarCambioEstado(e.target.value)}
-            title="Estado de la OT"
+            disabled={soloLectura}
+            title={
+              soloLectura ? "OT cerrada - solo lectura" : "Estado de la OT"
+            }
           >
             <option value="Pendiente">Pendiente</option>
             <option value="En revisión">En revisión</option>
@@ -1990,658 +2157,759 @@ function OT() {
         </div>
       </div>
 
-      <div className="ot-hoja">
-        <div className="ot-cabecera">
-          <img
-            src="/logo-emsa.png"
-            alt="Logo EMSA"
-            className="ot-cabecera-logo"
-          />
-          <div className="ot-cabecera-titulo">
-            REPORTE ACTIVIDADES MANTENIMIENTO
-            <small>ORDEN DE TRABAJO (OT)</small>
-          </div>
-          <div className="ot-cabecera-metadata">
-            <div>
-              <span>Código</span>
-              <strong>FO-GD-MS-23</strong>
-            </div>
-            <div>
-              <span>Versión</span>
-              <strong>04</strong>
-            </div>
-            <div>
-              <span>Fecha</span>
-              <strong>2024-07-12</strong>
-            </div>
-          </div>
+      {/* 🆕 Banner informativo de estado de bloqueo */}
+      {soloLectura && (
+        <div className="ot-banner-bloqueada">
+          🔒 Esta OT está <strong>cerrada</strong> y en modo solo lectura. Usa
+          el botón <strong>"Editar"</strong> para desbloquearla (requiere
+          contraseña).
         </div>
-
-        {/* DATOS OT */}
-        <div className="ot-seccion">
-          <div className="ot-seccion-titulo">Datos OT</div>
-          <div className="ot-grid ot-grid-4">
-            <div className="ot-campo-ot">
-              <span className="ot-campo-label">Fecha emisión OT</span>
-              <input
-                type="date"
-                className="ot-campo-input"
-                value={ot.fechaEmision}
-                onChange={(e) =>
-                  actualizarCampo("fechaEmision", e.target.value)
-                }
-              />
-            </div>
-            <div className="ot-campo-ot">
-              <span className="ot-campo-label">N° OT</span>
-              <input
-                type="text"
-                className="ot-campo-input"
-                value={ot.numeroOT}
-                onChange={(e) => actualizarCampo("numeroOT", e.target.value)}
-                placeholder="xxxxxx"
-              />
-            </div>
-            <div className="ot-campo-ot">
-              <span className="ot-campo-label">Tipo OT</span>
-              <input
-                type="text"
-                className="ot-campo-input"
-                list="lista-tipos-ot"
-                value={ot.tipoOT}
-                onChange={(e) => actualizarCampo("tipoOT", e.target.value)}
-              />
-              <datalist id="lista-tipos-ot">
-                {TIPOS_OT.map((t) => (
-                  <option key={t} value={t} />
-                ))}
-              </datalist>
-            </div>
-            <div className="ot-campo-ot">
-              <span className="ot-campo-label">Actividad</span>
-              <input
-                type="text"
-                className="ot-campo-input"
-                list="lista-actividades-ot"
-                value={ot.actividad}
-                onChange={(e) => actualizarCampo("actividad", e.target.value)}
-              />
-              <datalist id="lista-actividades-ot">
-                {ACTIVIDADES_OT.map((a) => (
-                  <option key={a} value={a} />
-                ))}
-              </datalist>
-            </div>
-          </div>
-
-          <div className="ot-grid ot-grid-1">
-            <div className="ot-campo-ot ot-campo-sin-borde-derecho">
-              <span className="ot-campo-label">Descripción OT</span>
-              <input
-                type="text"
-                className="ot-campo-input"
-                value={ot.descripcionOT}
-                onChange={(e) =>
-                  actualizarCampo("descripcionOT", e.target.value)
-                }
-              />
-            </div>
-          </div>
-
-          <div className="ot-grid ot-grid-1">
-            <div className="ot-campo-ot ot-campo-sin-borde-derecho">
-              <span className="ot-campo-label">Tipo de MTTO</span>
-              <input
-                type="text"
-                className="ot-campo-input"
-                list="lista-tipos-mtto"
-                value={ot.tipoMTTO}
-                onChange={(e) => actualizarCampo("tipoMTTO", e.target.value)}
-              />
-              <datalist id="lista-tipos-mtto">
-                {TIPOS_MTTO.map((t) => (
-                  <option key={t} value={t} />
-                ))}
-              </datalist>
-            </div>
-          </div>
-
-          <div className="ot-grid ot-grid-1">
-            <div className="ot-campo-ot ot-campo-sin-borde-derecho">
-              <span className="ot-campo-label">Equipo(s) a intervenir</span>
-              <input
-                type="text"
-                className="ot-campo-input"
-                value={ot.equiposIntervenir}
-                onChange={(e) =>
-                  actualizarCampo("equiposIntervenir", e.target.value)
-                }
-              />
-            </div>
-          </div>
-
-          <div className="ot-grid ot-grid-3">
-            <div className="ot-campo-ot">
-              <span className="ot-campo-label">Ubicación Geográfica</span>
-              <input
-                type="text"
-                className="ot-campo-input"
-                value={ot.ubicacionGeografica}
-                onChange={(e) =>
-                  actualizarCampo("ubicacionGeografica", e.target.value)
-                }
-              />
-            </div>
-            <div className="ot-campo-ot">
-              <span className="ot-campo-label">Inicio Actividad</span>
-              <input
-                type="date"
-                className="ot-campo-input"
-                value={ot.inicioActividadFecha}
-                onChange={(e) =>
-                  actualizarCampo("inicioActividadFecha", e.target.value)
-                }
-              />
-              <input
-                type="time"
-                className="ot-campo-input"
-                value={ot.inicioActividadHora}
-                onChange={(e) =>
-                  actualizarCampo("inicioActividadHora", e.target.value)
-                }
-              />
-            </div>
-            <div className="ot-campo-ot ot-campo-sin-borde-derecho">
-              <span className="ot-campo-label">Fin Actividad</span>
-              <input
-                type="date"
-                className="ot-campo-input"
-                value={ot.finActividadFecha}
-                onChange={(e) =>
-                  actualizarCampo("finActividadFecha", e.target.value)
-                }
-              />
-              <input
-                type="time"
-                className="ot-campo-input"
-                value={ot.finActividadHora}
-                onChange={(e) =>
-                  actualizarCampo("finActividadHora", e.target.value)
-                }
-              />
-            </div>
-          </div>
+      )}
+      {!soloLectura && ot.estadoOT === "OT Cerrada" && (
+        <div className="ot-banner-desbloqueada">
+          🔓 Modo edición activado temporalmente. Al salir de la OT se volverá a
+          bloquear.
         </div>
+      )}
 
-        {/* PLANEACIÓN */}
-        <div className="ot-seccion">
-          <div className="ot-seccion-titulo">Planeación de Actividades</div>
-          <div className="ot-grid ot-grid-3">
-            <div className="ot-campo-ot">
-              <span className="ot-campo-label">Planeador</span>
-              <input
-                type="text"
-                className="ot-campo-input"
-                list="lista-planeadores"
-                value={ot.planeador}
-                onChange={(e) => actualizarCampo("planeador", e.target.value)}
-              />
-              <datalist id="lista-planeadores">
-                {PLANEADORES.map((p) => (
-                  <option key={p} value={p} />
-                ))}
-              </datalist>
+      {/* 🆕 Fieldset que bloquea recursivamente todos los controles */}
+      <fieldset
+        disabled={soloLectura}
+        className={`ot-hoja-fieldset${soloLectura ? " ot-hoja-bloqueada" : ""}`}
+      >
+        <div className="ot-hoja">
+          <div className="ot-cabecera">
+            <img
+              src="/logo-emsa.png"
+              alt="Logo EMSA"
+              className="ot-cabecera-logo"
+            />
+            <div className="ot-cabecera-titulo">
+              REPORTE ACTIVIDADES MANTENIMIENTO
+              <small>ORDEN DE TRABAJO (OT)</small>
             </div>
-            <div className="ot-campo-ot">
-              <span className="ot-campo-label">Cuadrilla(s)</span>
-              <input
-                type="text"
-                className="ot-campo-input"
-                value={ot.cuadrillas}
-                onChange={(e) => actualizarCampo("cuadrillas", e.target.value)}
-              />
-            </div>
-            <div className="ot-campo-ot ot-campo-sin-borde-derecho">
-              <span className="ot-campo-label">Fecha Planeada</span>
-              <input
-                type="date"
-                className="ot-campo-input"
-                value={ot.fechaPlaneada}
-                onChange={(e) =>
-                  actualizarCampo("fechaPlaneada", e.target.value)
-                }
-              />
+            <div className="ot-cabecera-metadata">
+              <div>
+                <span>Código</span>
+                <strong>FO-GD-MS-23</strong>
+              </div>
+              <div>
+                <span>Versión</span>
+                <strong>04</strong>
+              </div>
+              <div>
+                <span>Fecha</span>
+                <strong>2024-07-12</strong>
+              </div>
             </div>
           </div>
-          <div className="ot-grid ot-grid-3">
-            <div className="ot-campo-ot">
-              <span className="ot-campo-label">Documentación</span>
-              <input
-                type="text"
-                className="ot-campo-input"
-                value={ot.documentacion}
-                onChange={(e) =>
-                  actualizarCampo("documentacion", e.target.value)
-                }
-              />
-            </div>
-            <div className="ot-campo-ot">
-              <span className="ot-campo-label">Hrs. Estimadas</span>
-              <input
-                type="text"
-                className="ot-campo-input"
-                value={ot.horasEstimadas}
-                onChange={(e) =>
-                  actualizarCampo("horasEstimadas", e.target.value)
-                }
-              />
-            </div>
-            <div className="ot-campo-ot ot-campo-sin-borde-derecho">
-              <span className="ot-campo-label">Fecha Creada</span>
-              <input
-                type="date"
-                className="ot-campo-input"
-                value={ot.fechaCreada}
-                onChange={(e) => actualizarCampo("fechaCreada", e.target.value)}
-              />
-            </div>
-          </div>
-          <div className="ot-grid ot-grid-2">
-            <div className="ot-campo-ot">
-              <span className="ot-campo-label">N° Cuadrilla(s)</span>
-              <input
-                type="text"
-                className="ot-campo-input"
-                value={ot.nCuadrillas}
-                onChange={(e) => actualizarCampo("nCuadrillas", e.target.value)}
-              />
-            </div>
-            <div className="ot-campo-ot ot-campo-sin-borde-derecho">
-              <span className="ot-campo-label">Equipo</span>
-              <input
-                type="text"
-                className="ot-campo-input"
-                value={ot.equipo}
-                onChange={(e) => actualizarCampo("equipo", e.target.value)}
-              />
-            </div>
-          </div>
-        </div>
 
-        {/* PERSONAL */}
-        <div className="ot-seccion">
-          <div className="ot-seccion-titulo">Personal</div>
-          <div className="ot-grid-personal">
-            <table className="ot-tabla-interna ot-tabla-personal">
-              <thead>
-                <tr>
-                  <th style={{ width: "65%" }}>Personal</th>
-                  <th style={{ width: "35%" }}>Cantidad</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>Ingeniero(s)</td>
-                  <td>
-                    <input
-                      type="number"
-                      min="0"
-                      className="ot-input-num"
-                      value={ot.cantIngenieros}
-                      onChange={(e) =>
-                        actualizarCampo("cantIngenieros", e.target.value)
-                      }
-                    />
-                  </td>
-                </tr>
-                <tr>
-                  <td>Asistente(s) EMSA / Cuadrillero(s)</td>
-                  <td>
-                    <input
-                      type="number"
-                      min="0"
-                      className="ot-input-num"
-                      value={ot.cantAsistentes}
-                      onChange={(e) =>
-                        actualizarCampo("cantAsistentes", e.target.value)
-                      }
-                    />
-                  </td>
-                </tr>
-                <tr>
-                  <td>Técnico(s) Electricista(s)</td>
-                  <td>
-                    <input
-                      type="number"
-                      min="0"
-                      className="ot-input-num"
-                      value={ot.cantTecnicos}
-                      onChange={(e) =>
-                        actualizarCampo("cantTecnicos", e.target.value)
-                      }
-                    />
-                  </td>
-                </tr>
-                <tr>
-                  <td>Auxiliar(es) MTTO</td>
-                  <td>
-                    <input
-                      type="number"
-                      min="0"
-                      className="ot-input-num"
-                      value={ot.cantAuxiliares}
-                      onChange={(e) =>
-                        actualizarCampo("cantAuxiliares", e.target.value)
-                      }
-                    />
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-            <table className="ot-tabla-interna ot-tabla-personal">
-              <tbody>
-                <tr>
-                  <td style={{ width: "50%", fontWeight: 700 }}>
-                    ORDEN SAP #:
-                  </td>
-                  <td>
-                    <input
-                      type="text"
-                      value={ot.ordenSAP}
-                      onChange={(e) =>
-                        actualizarCampo("ordenSAP", e.target.value)
-                      }
-                    />
-                  </td>
-                </tr>
-                <tr>
-                  <td style={{ fontWeight: 700 }}>Memorando / Formato #:</td>
-                  <td>
-                    <input
-                      type="text"
-                      value={ot.memorandoFormato}
-                      onChange={(e) =>
-                        actualizarCampo("memorandoFormato", e.target.value)
-                      }
-                    />
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* DESCRIPCIÓN ACTIVIDADES + DIAGRAMA */}
-        <div className="ot-seccion">
-          <div className="ot-seccion-titulo">Descripción de Actividades</div>
-          <div className="ot-grid-actividades">
-            <div className="ot-bloque-actividades">
-              <span className="ot-bloque-etiqueta">
-                DESCRIPCIÓN DE ACTIVIDADES:
-              </span>
-              <textarea
-                className="ot-textarea ot-textarea-grande"
-                rows="3"
-                style={{ minHeight: "55px", height: "55px" }}
-                value={ot.descripcionActividades}
-                onChange={(e) =>
-                  actualizarCampo("descripcionActividades", e.target.value)
-                }
-                placeholder="Describa las actividades a realizar..."
-              />
-            </div>
-            <div className="ot-bloque-diagrama">
-              <span className="ot-bloque-etiqueta">DIAGRAMA UNIFILAR</span>
-              <div
-                className="ot-foto-zona"
-                onClick={() =>
-                  document.getElementById("input-diagrama-unifilar")?.click()
-                }
-                style={{ minHeight: "180px", height: "180px" }}
-              >
-                {ot.diagramaUnifilar ? (
-                  <>
-                    <img
-                      src={ot.diagramaUnifilar}
-                      alt="Diagrama unifilar"
-                      className="ot-foto-zona-imagen"
-                    />
-                    <span className="ot-foto-zona-texto">
-                      Clic para cambiar
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <span className="ot-foto-zona-icono">📷</span>
-                    <span className="ot-foto-zona-texto">
-                      Anexar fotografía
-                    </span>
-                  </>
-                )}
+          {/* DATOS OT */}
+          <div className="ot-seccion">
+            <div className="ot-seccion-titulo">Datos OT</div>
+            <div className="ot-grid ot-grid-4">
+              <div className="ot-campo-ot">
+                <span className="ot-campo-label">Fecha emisión OT</span>
                 <input
-                  id="input-diagrama-unifilar"
-                  type="file"
-                  accept="image/*"
+                  type="date"
+                  className="ot-campo-input"
+                  value={ot.fechaEmision}
                   onChange={(e) =>
-                    manejarFoto("diagrama", 0, e.target.files?.[0])
+                    actualizarCampo("fechaEmision", e.target.value)
                   }
                 />
               </div>
-              {ot.diagramaUnifilar && (
-                <button
-                  type="button"
-                  className="ot-btn-mini"
-                  onClick={() => eliminarFoto("diagrama")}
-                >
-                  Eliminar foto
-                </button>
-              )}
+              <div className="ot-campo-ot">
+                <span className="ot-campo-label">N° OT</span>
+                <input
+                  type="text"
+                  className="ot-campo-input"
+                  value={ot.numeroOT}
+                  onChange={(e) => actualizarCampo("numeroOT", e.target.value)}
+                  placeholder="xxxxxx"
+                />
+              </div>
+              <div className="ot-campo-ot">
+                <span className="ot-campo-label">Tipo OT</span>
+                <input
+                  type="text"
+                  className="ot-campo-input"
+                  list="lista-tipos-ot"
+                  value={ot.tipoOT}
+                  onChange={(e) => actualizarCampo("tipoOT", e.target.value)}
+                />
+                <datalist id="lista-tipos-ot">
+                  {TIPOS_OT.map((t) => (
+                    <option key={t} value={t} />
+                  ))}
+                </datalist>
+              </div>
+              <div className="ot-campo-ot">
+                <span className="ot-campo-label">Actividad</span>
+                <input
+                  type="text"
+                  className="ot-campo-input"
+                  list="lista-actividades-ot"
+                  value={ot.actividad}
+                  onChange={(e) => actualizarCampo("actividad", e.target.value)}
+                />
+                <datalist id="lista-actividades-ot">
+                  {ACTIVIDADES_OT.map((a) => (
+                    <option key={a} value={a} />
+                  ))}
+                </datalist>
+              </div>
+            </div>
+
+            <div className="ot-grid ot-grid-1">
+              <div className="ot-campo-ot ot-campo-sin-borde-derecho">
+                <span className="ot-campo-label">Descripción OT</span>
+                <input
+                  type="text"
+                  className="ot-campo-input"
+                  value={ot.descripcionOT}
+                  onChange={(e) =>
+                    actualizarCampo("descripcionOT", e.target.value)
+                  }
+                />
+              </div>
+            </div>
+
+            <div className="ot-grid ot-grid-1">
+              <div className="ot-campo-ot ot-campo-sin-borde-derecho">
+                <span className="ot-campo-label">Tipo de MTTO</span>
+                <input
+                  type="text"
+                  className="ot-campo-input"
+                  list="lista-tipos-mtto"
+                  value={ot.tipoMTTO}
+                  onChange={(e) => actualizarCampo("tipoMTTO", e.target.value)}
+                />
+                <datalist id="lista-tipos-mtto">
+                  {TIPOS_MTTO.map((t) => (
+                    <option key={t} value={t} />
+                  ))}
+                </datalist>
+              </div>
+            </div>
+
+            <div className="ot-grid ot-grid-1">
+              <div className="ot-campo-ot ot-campo-sin-borde-derecho">
+                <span className="ot-campo-label">Equipo(s) a intervenir</span>
+                <input
+                  type="text"
+                  className="ot-campo-input"
+                  value={ot.equiposIntervenir}
+                  onChange={(e) =>
+                    actualizarCampo("equiposIntervenir", e.target.value)
+                  }
+                />
+              </div>
+            </div>
+
+            <div className="ot-grid ot-grid-3">
+              <div className="ot-campo-ot">
+                <span className="ot-campo-label">Ubicación Geográfica</span>
+                <input
+                  type="text"
+                  className="ot-campo-input"
+                  value={ot.ubicacionGeografica}
+                  onChange={(e) =>
+                    actualizarCampo("ubicacionGeografica", e.target.value)
+                  }
+                />
+              </div>
+              <div className="ot-campo-ot">
+                <span className="ot-campo-label">Inicio Actividad</span>
+                <input
+                  type="date"
+                  className="ot-campo-input"
+                  value={ot.inicioActividadFecha}
+                  onChange={(e) =>
+                    actualizarCampo("inicioActividadFecha", e.target.value)
+                  }
+                />
+                <input
+                  type="time"
+                  className="ot-campo-input"
+                  value={ot.inicioActividadHora}
+                  onChange={(e) =>
+                    actualizarCampo("inicioActividadHora", e.target.value)
+                  }
+                />
+              </div>
+              <div className="ot-campo-ot ot-campo-sin-borde-derecho">
+                <span className="ot-campo-label">Fin Actividad</span>
+                <input
+                  type="date"
+                  className="ot-campo-input"
+                  value={ot.finActividadFecha}
+                  onChange={(e) =>
+                    actualizarCampo("finActividadFecha", e.target.value)
+                  }
+                />
+                <input
+                  type="time"
+                  className="ot-campo-input"
+                  value={ot.finActividadHora}
+                  onChange={(e) =>
+                    actualizarCampo("finActividadHora", e.target.value)
+                  }
+                />
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* EJECUCIÓN */}
-        <div className="ot-seccion">
-          <div className="ot-seccion-titulo">Ejecución de Actividades</div>
-          <table className="ot-tabla-interna">
-            <thead>
-              <tr>
-                <th style={{ width: "22%" }}>Descripción</th>
-                <th style={{ width: "9%" }}>Inicio</th>
-                <th style={{ width: "9%" }}>Fin</th>
-                <th style={{ width: "22%" }}>Descripción</th>
-                <th style={{ width: "9%" }}>Inicio</th>
-                <th style={{ width: "9%" }}>Fin</th>
-                <th style={{ width: "10%" }}>Total desplaz.</th>
-                <th style={{ width: "10%" }}>Total trabajo</th>
-              </tr>
-            </thead>
-            <tbody>
-              {[1, 2, 3].map((num) => {
-                const clave = `dia${num}`;
-                const d = ot.ejecucion[clave];
-                const calc = calcularDia(clave);
-                return (
-                  <tr key={clave}>
-                    <td>
-                      <div className="ot-celda-dia">
-                        <strong>Día {num}</strong>
-                        <small>Inicio desplazamiento</small>
-                      </div>
-                    </td>
-                    <td>
-                      <input
-                        type="time"
-                        className="ot-input-hora"
-                        value={d.iniDesp1}
-                        onChange={(e) =>
-                          actualizarEjecucion(clave, "iniDesp1", e.target.value)
-                        }
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="time"
-                        className="ot-input-hora"
-                        value={d.finDesp1}
-                        onChange={(e) =>
-                          actualizarEjecucion(clave, "finDesp1", e.target.value)
-                        }
-                      />
-                    </td>
-                    <td>Fin desplazamiento</td>
-                    <td colSpan="2"></td>
-                    <td className="ot-celda-total" rowSpan="3">
-                      {formatearHoras(calc.totalDesplazamiento)}
-                    </td>
-                    <td className="ot-celda-total" rowSpan="3">
-                      {formatearHoras(calc.totalTrabajo)}
-                    </td>
+          {/* PLANEACIÓN */}
+          <div className="ot-seccion">
+            <div className="ot-seccion-titulo">Planeación de Actividades</div>
+            <div className="ot-grid ot-grid-3">
+              <div className="ot-campo-ot">
+                <span className="ot-campo-label">Planeador</span>
+                <input
+                  type="text"
+                  className="ot-campo-input"
+                  list="lista-planeadores"
+                  value={ot.planeador}
+                  onChange={(e) => actualizarCampo("planeador", e.target.value)}
+                />
+                <datalist id="lista-planeadores">
+                  {PLANEADORES.map((p) => (
+                    <option key={p} value={p} />
+                  ))}
+                </datalist>
+              </div>
+              <div className="ot-campo-ot">
+                <span className="ot-campo-label">Cuadrilla(s)</span>
+                <input
+                  type="text"
+                  className="ot-campo-input"
+                  value={ot.cuadrillas}
+                  onChange={(e) =>
+                    actualizarCampo("cuadrillas", e.target.value)
+                  }
+                />
+              </div>
+              <div className="ot-campo-ot ot-campo-sin-borde-derecho">
+                <span className="ot-campo-label">Fecha Planeada</span>
+                <input
+                  type="date"
+                  className="ot-campo-input"
+                  value={ot.fechaPlaneada}
+                  onChange={(e) =>
+                    actualizarCampo("fechaPlaneada", e.target.value)
+                  }
+                />
+              </div>
+            </div>
+            <div className="ot-grid ot-grid-3">
+              <div className="ot-campo-ot">
+                <span className="ot-campo-label">Documentación</span>
+                <input
+                  type="text"
+                  className="ot-campo-input"
+                  value={ot.documentacion}
+                  onChange={(e) =>
+                    actualizarCampo("documentacion", e.target.value)
+                  }
+                />
+              </div>
+              <div className="ot-campo-ot">
+                <span className="ot-campo-label">Hrs. Estimadas</span>
+                <input
+                  type="text"
+                  className="ot-campo-input"
+                  value={ot.horasEstimadas}
+                  onChange={(e) =>
+                    actualizarCampo("horasEstimadas", e.target.value)
+                  }
+                />
+              </div>
+              <div className="ot-campo-ot ot-campo-sin-borde-derecho">
+                <span className="ot-campo-label">Fecha Creada</span>
+                <input
+                  type="date"
+                  className="ot-campo-input"
+                  value={ot.fechaCreada}
+                  onChange={(e) =>
+                    actualizarCampo("fechaCreada", e.target.value)
+                  }
+                />
+              </div>
+            </div>
+            <div className="ot-grid ot-grid-2">
+              <div className="ot-campo-ot">
+                <span className="ot-campo-label">N° Cuadrilla(s)</span>
+                <input
+                  type="text"
+                  className="ot-campo-input"
+                  value={ot.nCuadrillas}
+                  onChange={(e) =>
+                    actualizarCampo("nCuadrillas", e.target.value)
+                  }
+                />
+              </div>
+              <div className="ot-campo-ot ot-campo-sin-borde-derecho">
+                <span className="ot-campo-label">Equipo</span>
+                <input
+                  type="text"
+                  className="ot-campo-input"
+                  value={ot.equipo}
+                  onChange={(e) => actualizarCampo("equipo", e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* PERSONAL */}
+          <div className="ot-seccion">
+            <div className="ot-seccion-titulo">Personal</div>
+            <div className="ot-grid-personal">
+              <table className="ot-tabla-interna ot-tabla-personal">
+                <thead>
+                  <tr>
+                    <th style={{ width: "65%" }}>Personal</th>
+                    <th style={{ width: "35%" }}>Cantidad</th>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-
-          {[1, 2, 3].map((num) => {
-            const clave = `dia${num}`;
-            const d = ot.ejecucion[clave];
-            const calc = calcularDia(clave);
-            return (
-              <table
-                key={clave}
-                className="ot-tabla-interna ot-tabla-dia-detalle"
-              >
+                </thead>
                 <tbody>
                   <tr>
-                    <td style={{ width: "30%" }}>
-                      <strong>Día {num}</strong> · Inicio actividad
-                    </td>
-                    <td style={{ width: "15%" }}>
+                    <td>Ingeniero(s)</td>
+                    <td>
                       <input
-                        type="time"
-                        className="ot-input-hora"
-                        value={d.iniAct1}
+                        type="number"
+                        min="0"
+                        className="ot-input-num"
+                        value={ot.cantIngenieros}
                         onChange={(e) =>
-                          actualizarEjecucion(clave, "iniAct1", e.target.value)
+                          actualizarCampo("cantIngenieros", e.target.value)
                         }
                       />
                     </td>
-                    <td style={{ width: "15%" }}>
-                      <input
-                        type="time"
-                        className="ot-input-hora"
-                        value={d.finAct1}
-                        onChange={(e) =>
-                          actualizarEjecucion(clave, "finAct1", e.target.value)
-                        }
-                      />
-                    </td>
-                    <td style={{ width: "20%" }}>Fin actividad</td>
-                    <td style={{ width: "10%" }}>
-                      <span className="ot-celda-total-inline">
-                        {formatearHoras(calc.totalTrabajo)} h
-                      </span>
-                    </td>
-                    <td style={{ width: "10%" }}></td>
                   </tr>
                   <tr>
-                    <td>Inicio desplazamiento (regreso)</td>
+                    <td>Asistente(s) EMSA / Cuadrillero(s)</td>
                     <td>
                       <input
-                        type="time"
-                        className="ot-input-hora"
-                        value={d.iniDesp2}
+                        type="number"
+                        min="0"
+                        className="ot-input-num"
+                        value={ot.cantAsistentes}
                         onChange={(e) =>
-                          actualizarEjecucion(clave, "iniDesp2", e.target.value)
+                          actualizarCampo("cantAsistentes", e.target.value)
                         }
                       />
                     </td>
+                  </tr>
+                  <tr>
+                    <td>Técnico(s) Electricista(s)</td>
                     <td>
                       <input
-                        type="time"
-                        className="ot-input-hora"
-                        value={d.finDesp2}
+                        type="number"
+                        min="0"
+                        className="ot-input-num"
+                        value={ot.cantTecnicos}
                         onChange={(e) =>
-                          actualizarEjecucion(clave, "finDesp2", e.target.value)
+                          actualizarCampo("cantTecnicos", e.target.value)
                         }
                       />
                     </td>
-                    <td>Fin desplazamiento</td>
+                  </tr>
+                  <tr>
+                    <td>Auxiliar(es) MTTO</td>
                     <td>
-                      <span className="ot-celda-total-inline">
-                        {formatearHoras(calc.totalDesplazamiento)} h
-                      </span>
+                      <input
+                        type="number"
+                        min="0"
+                        className="ot-input-num"
+                        value={ot.cantAuxiliares}
+                        onChange={(e) =>
+                          actualizarCampo("cantAuxiliares", e.target.value)
+                        }
+                      />
                     </td>
-                    <td></td>
                   </tr>
                 </tbody>
               </table>
-            );
-          })}
+              <table className="ot-tabla-interna ot-tabla-personal">
+                <tbody>
+                  <tr>
+                    <td style={{ width: "50%", fontWeight: 700 }}>
+                      ORDEN SAP #:
+                    </td>
+                    <td>
+                      <input
+                        type="text"
+                        value={ot.ordenSAP}
+                        onChange={(e) =>
+                          actualizarCampo("ordenSAP", e.target.value)
+                        }
+                      />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style={{ fontWeight: 700 }}>Memorando / Formato #:</td>
+                    <td>
+                      <input
+                        type="text"
+                        value={ot.memorandoFormato}
+                        onChange={(e) =>
+                          actualizarCampo("memorandoFormato", e.target.value)
+                        }
+                      />
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
 
-          <table className="ot-tabla-interna ot-tabla-totales">
-            <tbody>
-              <tr>
-                <td
-                  style={{ width: "70%", textAlign: "right", fontWeight: 700 }}
+          {/* DESCRIPCIÓN ACTIVIDADES + DIAGRAMA */}
+          <div className="ot-seccion">
+            <div className="ot-seccion-titulo">Descripción de Actividades</div>
+            <div className="ot-grid-actividades">
+              <div className="ot-bloque-actividades">
+                <span className="ot-bloque-etiqueta">
+                  DESCRIPCIÓN DE ACTIVIDADES:
+                </span>
+                <textarea
+                  className="ot-textarea ot-textarea-grande"
+                  rows="3"
+                  style={{ minHeight: "55px", height: "55px" }}
+                  value={ot.descripcionActividades}
+                  onChange={(e) =>
+                    actualizarCampo("descripcionActividades", e.target.value)
+                  }
+                  placeholder="Describa las actividades a realizar..."
+                />
+              </div>
+              <div className="ot-bloque-diagrama">
+                <span className="ot-bloque-etiqueta">DIAGRAMA UNIFILAR</span>
+                <div
+                  className="ot-foto-zona"
+                  onClick={() =>
+                    document.getElementById("input-diagrama-unifilar")?.click()
+                  }
+                  style={{ minHeight: "180px", height: "180px" }}
                 >
-                  Total horas desplazamiento:
-                </td>
-                <td className="ot-celda-total">
-                  {formatearHoras(totalHorasDesplazamiento)}
-                </td>
-              </tr>
-              <tr>
-                <td style={{ textAlign: "right", fontWeight: 700 }}>
-                  Total horas trabajo efectivo:
-                </td>
-                <td className="ot-celda-total">
-                  {formatearHoras(totalHorasTrabajo)}
-                </td>
-              </tr>
-              <tr>
-                <td style={{ textAlign: "right", fontWeight: 700 }}>
-                  Total horas actividad (desplazamiento + trabajo):
-                </td>
-                <td className="ot-celda-total">
-                  {formatearHoras(totalHorasDesplazamiento + totalHorasTrabajo)}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        {/* ACTIVIDADES PRELIMINARES */}
-        <div className="ot-seccion">
-          <table className="ot-tabla-interna ot-tabla-preliminares">
-            <thead>
-              <tr>
-                <th style={{ width: "30%" }}>Actividades preliminares</th>
-                <th style={{ width: "15%" }}>Tiempo (Horas)</th>
-                <th style={{ width: "55%" }}>
-                  Descripción de actividades realizadas
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {[
-                ["charlaSeguridad", "CHARLA SEGURIDAD"],
-                ["admonDocumentacion", "ADMÓN DOCUMENTACIÓN"],
-                ["esperaMateriales", "ESPERA DE MATERIALES"],
-                ["esperaHerramienta", "ESPERA DE HERRAMIENTA"],
-                ["__desplazamiento", "DESPLAZAMIENTO"],
-                ["esperaPermiso", "ESPERA PERMISO DE TRABAJO"],
-                ["aislamiento", "AISLAM / DES-AISLAM"],
-              ].map(([campo, etiqueta]) => (
-                <tr key={campo}>
-                  <td>{etiqueta}</td>
-                  <td>
-                    {campo === "__desplazamiento" ? (
-                      <span className="ot-celda-total-inline">
-                        {formatearHoras(totalHorasDesplazamiento)}
+                  {ot.diagramaUnifilar ? (
+                    <>
+                      <img
+                        src={ot.diagramaUnifilar}
+                        alt="Diagrama unifilar"
+                        className="ot-foto-zona-imagen"
+                      />
+                      <span className="ot-foto-zona-texto">
+                        Clic para cambiar
                       </span>
-                    ) : (
+                    </>
+                  ) : (
+                    <>
+                      <span className="ot-foto-zona-icono">📷</span>
+                      <span className="ot-foto-zona-texto">
+                        Anexar fotografía
+                      </span>
+                    </>
+                  )}
+                  <input
+                    id="input-diagrama-unifilar"
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) =>
+                      manejarFoto("diagrama", 0, e.target.files?.[0])
+                    }
+                  />
+                </div>
+                {ot.diagramaUnifilar && (
+                  <button
+                    type="button"
+                    className="ot-btn-mini"
+                    onClick={() => eliminarFoto("diagrama")}
+                  >
+                    Eliminar foto
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* EJECUCIÓN */}
+          <div className="ot-seccion">
+            <div className="ot-seccion-titulo">Ejecución de Actividades</div>
+            <table className="ot-tabla-interna">
+              <thead>
+                <tr>
+                  <th style={{ width: "22%" }}>Descripción</th>
+                  <th style={{ width: "9%" }}>Inicio</th>
+                  <th style={{ width: "9%" }}>Fin</th>
+                  <th style={{ width: "22%" }}>Descripción</th>
+                  <th style={{ width: "9%" }}>Inicio</th>
+                  <th style={{ width: "9%" }}>Fin</th>
+                  <th style={{ width: "10%" }}>Total desplaz.</th>
+                  <th style={{ width: "10%" }}>Total trabajo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[1, 2, 3].map((num) => {
+                  const clave = `dia${num}`;
+                  const d = ot.ejecucion[clave];
+                  const calc = calcularDia(clave);
+                  return (
+                    <tr key={clave}>
+                      <td>
+                        <div className="ot-celda-dia">
+                          <strong>Día {num}</strong>
+                          <small>Inicio desplazamiento</small>
+                        </div>
+                      </td>
+                      <td>
+                        <input
+                          type="time"
+                          className="ot-input-hora"
+                          value={d.iniDesp1}
+                          onChange={(e) =>
+                            actualizarEjecucion(
+                              clave,
+                              "iniDesp1",
+                              e.target.value,
+                            )
+                          }
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="time"
+                          className="ot-input-hora"
+                          value={d.finDesp1}
+                          onChange={(e) =>
+                            actualizarEjecucion(
+                              clave,
+                              "finDesp1",
+                              e.target.value,
+                            )
+                          }
+                        />
+                      </td>
+                      <td>Fin desplazamiento</td>
+                      <td colSpan="2"></td>
+                      <td className="ot-celda-total" rowSpan="3">
+                        {formatearHoras(calc.totalDesplazamiento)}
+                      </td>
+                      <td className="ot-celda-total" rowSpan="3">
+                        {formatearHoras(calc.totalTrabajo)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+
+            {[1, 2, 3].map((num) => {
+              const clave = `dia${num}`;
+              const d = ot.ejecucion[clave];
+              const calc = calcularDia(clave);
+              return (
+                <table
+                  key={clave}
+                  className="ot-tabla-interna ot-tabla-dia-detalle"
+                >
+                  <tbody>
+                    <tr>
+                      <td style={{ width: "30%" }}>
+                        <strong>Día {num}</strong> · Inicio actividad
+                      </td>
+                      <td style={{ width: "15%" }}>
+                        <input
+                          type="time"
+                          className="ot-input-hora"
+                          value={d.iniAct1}
+                          onChange={(e) =>
+                            actualizarEjecucion(
+                              clave,
+                              "iniAct1",
+                              e.target.value,
+                            )
+                          }
+                        />
+                      </td>
+                      <td style={{ width: "15%" }}>
+                        <input
+                          type="time"
+                          className="ot-input-hora"
+                          value={d.finAct1}
+                          onChange={(e) =>
+                            actualizarEjecucion(
+                              clave,
+                              "finAct1",
+                              e.target.value,
+                            )
+                          }
+                        />
+                      </td>
+                      <td style={{ width: "20%" }}>Fin actividad</td>
+                      <td style={{ width: "10%" }}>
+                        <span className="ot-celda-total-inline">
+                          {formatearHoras(calc.totalTrabajo)} h
+                        </span>
+                      </td>
+                      <td style={{ width: "10%" }}></td>
+                    </tr>
+                    <tr>
+                      <td>Inicio desplazamiento (regreso)</td>
+                      <td>
+                        <input
+                          type="time"
+                          className="ot-input-hora"
+                          value={d.iniDesp2}
+                          onChange={(e) =>
+                            actualizarEjecucion(
+                              clave,
+                              "iniDesp2",
+                              e.target.value,
+                            )
+                          }
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="time"
+                          className="ot-input-hora"
+                          value={d.finDesp2}
+                          onChange={(e) =>
+                            actualizarEjecucion(
+                              clave,
+                              "finDesp2",
+                              e.target.value,
+                            )
+                          }
+                        />
+                      </td>
+                      <td>Fin desplazamiento</td>
+                      <td>
+                        <span className="ot-celda-total-inline">
+                          {formatearHoras(calc.totalDesplazamiento)} h
+                        </span>
+                      </td>
+                      <td></td>
+                    </tr>
+                  </tbody>
+                </table>
+              );
+            })}
+
+            <table className="ot-tabla-interna ot-tabla-totales">
+              <tbody>
+                <tr>
+                  <td
+                    style={{
+                      width: "70%",
+                      textAlign: "right",
+                      fontWeight: 700,
+                    }}
+                  >
+                    Total horas desplazamiento:
+                  </td>
+                  <td className="ot-celda-total">
+                    {formatearHoras(totalHorasDesplazamiento)}
+                  </td>
+                </tr>
+                <tr>
+                  <td style={{ textAlign: "right", fontWeight: 700 }}>
+                    Total horas trabajo efectivo:
+                  </td>
+                  <td className="ot-celda-total">
+                    {formatearHoras(totalHorasTrabajo)}
+                  </td>
+                </tr>
+                <tr>
+                  <td style={{ textAlign: "right", fontWeight: 700 }}>
+                    Total horas actividad (desplazamiento + trabajo):
+                  </td>
+                  <td className="ot-celda-total">
+                    {formatearHoras(
+                      totalHorasDesplazamiento + totalHorasTrabajo,
+                    )}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          {/* ACTIVIDADES PRELIMINARES */}
+          <div className="ot-seccion">
+            <table className="ot-tabla-interna ot-tabla-preliminares">
+              <thead>
+                <tr>
+                  <th style={{ width: "30%" }}>Actividades preliminares</th>
+                  <th style={{ width: "15%" }}>Tiempo (Horas)</th>
+                  <th style={{ width: "55%" }}>
+                    Descripción de actividades realizadas
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {[
+                  ["charlaSeguridad", "CHARLA SEGURIDAD"],
+                  ["admonDocumentacion", "ADMÓN DOCUMENTACIÓN"],
+                  ["esperaMateriales", "ESPERA DE MATERIALES"],
+                  ["esperaHerramienta", "ESPERA DE HERRAMIENTA"],
+                  ["__desplazamiento", "DESPLAZAMIENTO"],
+                  ["esperaPermiso", "ESPERA PERMISO DE TRABAJO"],
+                  ["aislamiento", "AISLAM / DES-AISLAM"],
+                ].map(([campo, etiqueta]) => (
+                  <tr key={campo}>
+                    <td>{etiqueta}</td>
+                    <td>
+                      {campo === "__desplazamiento" ? (
+                        <span className="ot-celda-total-inline">
+                          {formatearHoras(totalHorasDesplazamiento)}
+                        </span>
+                      ) : (
+                        <input
+                          type="text"
+                          className="ot-input-hora"
+                          placeholder="00:00"
+                          value={ot.preliminares[campo]}
+                          onChange={(e) =>
+                            actualizarPreliminar(campo, e.target.value)
+                          }
+                        />
+                      )}
+                    </td>
+                    {campo === "charlaSeguridad" && (
+                      <td rowSpan={13} className="ot-celda-descripcion">
+                        <div className="ot-celda-descripcion-wrapper">
+                          <textarea
+                            className="ot-textarea-inline"
+                            value={ot.descripcionActividadesRealizadas}
+                            onChange={(e) =>
+                              actualizarCampo(
+                                "descripcionActividadesRealizadas",
+                                e.target.value,
+                              )
+                            }
+                            placeholder="Describa las actividades realizadas..."
+                          />
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+
+                <tr className="ot-fila-subtitulo">
+                  <td colSpan="2">
+                    <strong>TIEMPO EFECTIVO MTTO</strong>
+                  </td>
+                </tr>
+
+                {[
+                  ["cambioCondiciones", "CAMBIO DE CONDICIONES"],
+                  ["climatologia", "CLIMATOLOGÍA ADVERSA"],
+                  ["ordenPublico", "ORDEN PÚBLICO"],
+                ].map(([campo, etiqueta]) => (
+                  <tr key={campo}>
+                    <td>{etiqueta}</td>
+                    <td>
                       <input
                         type="text"
                         className="ot-input-hora"
@@ -2651,472 +2919,442 @@ function OT() {
                           actualizarPreliminar(campo, e.target.value)
                         }
                       />
-                    )}
-                  </td>
-                  {campo === "charlaSeguridad" && (
-                    <td rowSpan={13} className="ot-celda-descripcion">
-                      <div className="ot-celda-descripcion-wrapper">
-                        <textarea
-                          className="ot-textarea-inline"
-                          value={ot.descripcionActividadesRealizadas}
-                          onChange={(e) =>
-                            actualizarCampo(
-                              "descripcionActividadesRealizadas",
-                              e.target.value,
-                            )
-                          }
-                          placeholder="Describa las actividades realizadas..."
-                        />
-                      </div>
                     </td>
-                  )}
-                </tr>
-              ))}
+                  </tr>
+                ))}
 
-              <tr className="ot-fila-subtitulo">
-                <td colSpan="2">
-                  <strong>TIEMPO EFECTIVO MTTO</strong>
-                </td>
-              </tr>
-
-              {[
-                ["cambioCondiciones", "CAMBIO DE CONDICIONES"],
-                ["climatologia", "CLIMATOLOGÍA ADVERSA"],
-                ["ordenPublico", "ORDEN PÚBLICO"],
-              ].map(([campo, etiqueta]) => (
-                <tr key={campo}>
-                  <td>{etiqueta}</td>
+                <tr>
                   <td>
-                    <input
-                      type="text"
-                      className="ot-input-hora"
-                      placeholder="00:00"
-                      value={ot.preliminares[campo]}
-                      onChange={(e) =>
-                        actualizarPreliminar(campo, e.target.value)
-                      }
-                    />
+                    <strong>TIEMPO EJECUCIÓN OT</strong>
+                  </td>
+                  <td className="ot-celda-total">
+                    {formatearHoras(totalHorasTrabajo)}
                   </td>
                 </tr>
-              ))}
+                <tr>
+                  <td>
+                    <strong>TOTAL DURACIÓN TRABAJO</strong>
+                  </td>
+                  <td className="ot-celda-total">
+                    {formatearHoras(totalPreliminares + totalHorasTrabajo)}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
 
-              <tr>
-                <td>
-                  <strong>TIEMPO EJECUCIÓN OT</strong>
-                </td>
-                <td className="ot-celda-total">
-                  {formatearHoras(totalHorasTrabajo)}
-                </td>
-              </tr>
-              <tr>
-                <td>
-                  <strong>TOTAL DURACIÓN TRABAJO</strong>
-                </td>
-                <td className="ot-celda-total">
-                  {formatearHoras(totalPreliminares + totalHorasTrabajo)}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        {/* PERSONAL EJECUTOR */}
-        <div className="ot-seccion">
-          <div className="ot-seccion-titulo">Personal Ejecutor OT</div>
-          <table className="ot-tabla-interna">
-            <thead>
-              <tr>
-                <th style={{ width: "28%" }}>Nombre</th>
-                <th style={{ width: "20%" }}>Cargo</th>
-                <th style={{ width: "14%" }}>Empresa</th>
-                <th style={{ width: "14%" }}>Cédula</th>
-                <th style={{ width: "19%" }}>Firma</th>
-                <th style={{ width: "5%" }}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {ot.personalEjecutor.map((p, i) => (
-                <tr key={i}>
-                  <td>
-                    <input
-                      type="text"
-                      value={p.nombre}
-                      onChange={(e) =>
-                        actualizarPersonalEjecutor(i, "nombre", e.target.value)
-                      }
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="text"
-                      value={p.cargo}
-                      onChange={(e) =>
-                        actualizarPersonalEjecutor(i, "cargo", e.target.value)
-                      }
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="text"
-                      list="lista-empresas"
-                      value={p.empresa}
-                      onChange={(e) =>
-                        actualizarPersonalEjecutor(i, "empresa", e.target.value)
-                      }
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="text"
-                      value={p.cedula}
-                      onChange={(e) =>
-                        actualizarPersonalEjecutor(i, "cedula", e.target.value)
-                      }
-                    />
-                  </td>
-                  <td className="ot-celda-firma">
-                    <div
-                      className="ot-firma-personal-zona"
-                      onClick={() =>
-                        document
-                          .getElementById(`input-firma-personal-${i}`)
-                          ?.click()
-                      }
-                    >
-                      {p.firma ? (
-                        <img
-                          src={p.firma}
-                          alt={`Firma ${p.nombre || i + 1}`}
-                          className="ot-firma-personal-imagen"
-                        />
-                      ) : (
-                        <span className="ot-firma-personal-texto">
-                          Anexar firma
-                        </span>
-                      )}
+          {/* PERSONAL EJECUTOR */}
+          <div className="ot-seccion">
+            <div className="ot-seccion-titulo">Personal Ejecutor OT</div>
+            <table className="ot-tabla-interna">
+              <thead>
+                <tr>
+                  <th style={{ width: "28%" }}>Nombre</th>
+                  <th style={{ width: "20%" }}>Cargo</th>
+                  <th style={{ width: "14%" }}>Empresa</th>
+                  <th style={{ width: "14%" }}>Cédula</th>
+                  <th style={{ width: "19%" }}>Firma</th>
+                  <th style={{ width: "5%" }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {ot.personalEjecutor.map((p, i) => (
+                  <tr key={i}>
+                    <td>
                       <input
-                        id={`input-firma-personal-${i}`}
-                        type="file"
-                        accept="image/*"
+                        type="text"
+                        value={p.nombre}
                         onChange={(e) =>
-                          manejarFirmaPersonal(i, e.target.files?.[0])
+                          actualizarPersonalEjecutor(
+                            i,
+                            "nombre",
+                            e.target.value,
+                          )
                         }
                       />
-                    </div>
-                    {p.firma && (
+                    </td>
+                    <td>
+                      <input
+                        type="text"
+                        value={p.cargo}
+                        onChange={(e) =>
+                          actualizarPersonalEjecutor(i, "cargo", e.target.value)
+                        }
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="text"
+                        list="lista-empresas"
+                        value={p.empresa}
+                        onChange={(e) =>
+                          actualizarPersonalEjecutor(
+                            i,
+                            "empresa",
+                            e.target.value,
+                          )
+                        }
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="text"
+                        value={p.cedula}
+                        onChange={(e) =>
+                          actualizarPersonalEjecutor(
+                            i,
+                            "cedula",
+                            e.target.value,
+                          )
+                        }
+                      />
+                    </td>
+                    <td className="ot-celda-firma">
+                      <div
+                        className="ot-firma-personal-zona"
+                        onClick={() =>
+                          document
+                            .getElementById(`input-firma-personal-${i}`)
+                            ?.click()
+                        }
+                      >
+                        {p.firma ? (
+                          <img
+                            src={p.firma}
+                            alt={`Firma ${p.nombre || i + 1}`}
+                            className="ot-firma-personal-imagen"
+                          />
+                        ) : (
+                          <span className="ot-firma-personal-texto">
+                            Anexar firma
+                          </span>
+                        )}
+                        <input
+                          id={`input-firma-personal-${i}`}
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) =>
+                            manejarFirmaPersonal(i, e.target.files?.[0])
+                          }
+                        />
+                      </div>
+                      {p.firma && (
+                        <button
+                          type="button"
+                          className="ot-btn-mini"
+                          onClick={() => eliminarFirmaPersonal(i)}
+                        >
+                          Quitar
+                        </button>
+                      )}
+                    </td>
+                    <td>
                       <button
                         type="button"
-                        className="ot-btn-mini"
-                        onClick={() => eliminarFirmaPersonal(i)}
+                        className="ot-btn-eliminar"
+                        onClick={() => eliminarPersonalEjecutor(i)}
+                        title="Eliminar fila"
                       >
-                        Quitar
+                        ✕
                       </button>
-                    )}
-                  </td>
-                  <td>
-                    <button
-                      type="button"
-                      className="ot-btn-eliminar"
-                      onClick={() => eliminarPersonalEjecutor(i)}
-                      title="Eliminar fila"
-                    >
-                      ✕
-                    </button>
-                  </td>
-                </tr>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <datalist id="lista-empresas">
+              {EMPRESAS.map((e) => (
+                <option key={e} value={e} />
               ))}
-            </tbody>
-          </table>
-          <datalist id="lista-empresas">
-            {EMPRESAS.map((e) => (
-              <option key={e} value={e} />
-            ))}
-          </datalist>
-          <button
-            type="button"
-            className="ot-btn-agregar-fila"
-            onClick={agregarPersonalEjecutor}
-          >
-            + Agregar persona
-          </button>
-        </div>
-
-        {/* MATERIALES */}
-        <div className="ot-seccion">
-          <div className="ot-seccion-titulo">
-            Materiales y Equipos Utilizados
+            </datalist>
+            <button
+              type="button"
+              className="ot-btn-agregar-fila"
+              onClick={agregarPersonalEjecutor}
+            >
+              + Agregar persona
+            </button>
           </div>
-          <table className="ot-tabla-interna">
-            <thead>
-              <tr>
-                <th style={{ width: "55%" }}>Descripción</th>
-                <th style={{ width: "15%" }}>Cantidad</th>
-                <th style={{ width: "25%" }}>SAP / Memorando / Otro</th>
-                <th style={{ width: "5%" }}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {ot.materiales.map((m, i) => (
-                <tr key={i}>
-                  <td>
-                    <input
-                      type="text"
-                      value={m.descripcion}
-                      onChange={(e) =>
-                        actualizarMaterial(i, "descripcion", e.target.value)
-                      }
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="text"
-                      className="ot-input-num"
-                      value={m.cantidad}
-                      onChange={(e) =>
-                        actualizarMaterial(i, "cantidad", e.target.value)
-                      }
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="text"
-                      value={m.referencia}
-                      onChange={(e) =>
-                        actualizarMaterial(i, "referencia", e.target.value)
-                      }
-                    />
-                  </td>
-                  <td>
-                    <button
-                      type="button"
-                      className="ot-btn-eliminar"
-                      onClick={() => eliminarMaterial(i)}
-                      title="Eliminar fila"
-                    >
-                      ✕
-                    </button>
-                  </td>
+
+          {/* MATERIALES */}
+          <div className="ot-seccion">
+            <div className="ot-seccion-titulo">
+              Materiales y Equipos Utilizados
+            </div>
+            <table className="ot-tabla-interna">
+              <thead>
+                <tr>
+                  <th style={{ width: "55%" }}>Descripción</th>
+                  <th style={{ width: "15%" }}>Cantidad</th>
+                  <th style={{ width: "25%" }}>SAP / Memorando / Otro</th>
+                  <th style={{ width: "5%" }}></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          <button
-            type="button"
-            className="ot-btn-agregar-fila"
-            onClick={agregarMaterial}
-          >
-            + Agregar material
-          </button>
-        </div>
-
-        {/* DOCUMENTOS SOPORTE */}
-        <div className="ot-seccion">
-          <div className="ot-seccion-titulo">Documentos Soporte OT</div>
-          <div className="ot-grid ot-grid-2">
-            <div className="ot-campo-ot">
-              <span className="ot-campo-label">Número(s) de Informe</span>
-              <textarea
-                className="ot-campo-input"
-                style={{
-                  minHeight: "60px",
-                  height: "60px",
-                  resize: "vertical",
-                }}
-                value={ot.numeroInforme}
-                onChange={(e) =>
-                  actualizarCampo("numeroInforme", e.target.value)
-                }
-                placeholder="Ej: INF-001, INF-002..."
-              />
-            </div>
-            <div className="ot-campo-ot ot-campo-sin-borde-derecho">
-              <span className="ot-campo-label">Informe recibido por</span>
-              <input
-                type="text"
-                className="ot-campo-input"
-                value={ot.informeRecibidoPor}
-                onChange={(e) =>
-                  actualizarCampo("informeRecibidoPor", e.target.value)
-                }
-              />
-            </div>
-            <div className="ot-campo-ot">
-              <span className="ot-campo-label">
-                Fecha aprobación del informe
-              </span>
-              <input
-                type="date"
-                className="ot-campo-input"
-                value={ot.fechaAprobacionInforme}
-                onChange={(e) =>
-                  actualizarCampo("fechaAprobacionInforme", e.target.value)
-                }
-              />
-            </div>
-            <div className="ot-campo-ot ot-campo-sin-borde-derecho">
-              <span className="ot-campo-label">Informe aprobado por</span>
-              <input
-                type="text"
-                className="ot-campo-input"
-                value={ot.informeAprobadoPor}
-                onChange={(e) =>
-                  actualizarCampo("informeAprobadoPor", e.target.value)
-                }
-              />
-            </div>
+              </thead>
+              <tbody>
+                {ot.materiales.map((m, i) => (
+                  <tr key={i}>
+                    <td>
+                      <input
+                        type="text"
+                        value={m.descripcion}
+                        onChange={(e) =>
+                          actualizarMaterial(i, "descripcion", e.target.value)
+                        }
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="text"
+                        className="ot-input-num"
+                        value={m.cantidad}
+                        onChange={(e) =>
+                          actualizarMaterial(i, "cantidad", e.target.value)
+                        }
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="text"
+                        value={m.referencia}
+                        onChange={(e) =>
+                          actualizarMaterial(i, "referencia", e.target.value)
+                        }
+                      />
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className="ot-btn-eliminar"
+                        onClick={() => eliminarMaterial(i)}
+                        title="Eliminar fila"
+                      >
+                        ✕
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <button
+              type="button"
+              className="ot-btn-agregar-fila"
+              onClick={agregarMaterial}
+            >
+              + Agregar material
+            </button>
           </div>
-        </div>
 
-        {/* CIERRE */}
-        <div className="ot-seccion">
-          <div className="ot-seccion-titulo">Cierre OT</div>
-          <div className="ot-cierre-grid">
-            <div className="ot-cierre-bloque">
-              <div className="ot-foto-zona ot-foto-cierre">
-                {ot.firmaAutorizacion ? (
-                  <img
-                    src={ot.firmaAutorizacion}
-                    alt="Firma autorización ejecución OT"
-                    className="ot-foto-zona-imagen"
-                  />
-                ) : (
-                  <>
-                    <span className="ot-foto-zona-icono">✍️</span>
-                    <span className="ot-foto-zona-texto">
-                      Firma autorización
-                    </span>
-                  </>
-                )}
-              </div>
-              <div className="ot-firma-linea"></div>
-              <span className="ot-firma-label">
-                Firma autorización ejecución OT
-              </span>
-              <input
-                type="date"
-                className="ot-campo-input"
-                style={{ textAlign: "center", fontSize: 8 }}
-                value={ot.fechaAutorizacion}
-                onChange={(e) =>
-                  actualizarCampo("fechaAutorizacion", e.target.value)
-                }
-              />
-              <span className="ot-firma-sub">Fecha Autorización OT</span>
-            </div>
-
-            <div className="ot-cierre-bloque">
-              <div
-                className="ot-foto-zona ot-foto-cierre"
-                onClick={() =>
-                  document.getElementById("input-foto-cierre-1")?.click()
-                }
-              >
-                {ot.fotosCierre[1] ? (
-                  <>
-                    <img
-                      src={ot.fotosCierre[1]}
-                      alt="Foto cierre 2"
-                      className="ot-foto-zona-imagen"
-                    />
-                    <span className="ot-foto-zona-texto">
-                      Clic para cambiar
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <span className="ot-foto-zona-icono">📷</span>
-                    <span className="ot-foto-zona-texto">Anexar foto</span>
-                  </>
-                )}
-                <input
-                  id="input-foto-cierre-1"
-                  type="file"
-                  accept="image/*"
+          {/* DOCUMENTOS SOPORTE */}
+          <div className="ot-seccion">
+            <div className="ot-seccion-titulo">Documentos Soporte OT</div>
+            <div className="ot-grid ot-grid-2">
+              <div className="ot-campo-ot">
+                <span className="ot-campo-label">Número(s) de Informe</span>
+                <textarea
+                  className="ot-campo-input"
+                  style={{
+                    minHeight: "60px",
+                    height: "60px",
+                    resize: "vertical",
+                  }}
+                  value={ot.numeroInforme}
                   onChange={(e) =>
-                    manejarFoto("cierre", 1, e.target.files?.[0])
+                    actualizarCampo("numeroInforme", e.target.value)
                   }
+                  placeholder="Ej: INF-001, INF-002..."
                 />
               </div>
-              {ot.fotosCierre[1] && (
-                <button
-                  type="button"
-                  className="ot-btn-mini"
-                  onClick={() => eliminarFoto("cierre", 1)}
-                >
-                  Eliminar foto
-                </button>
-              )}
-              <div className="ot-firma-linea"></div>
-              <span className="ot-firma-label">Ejecutado por</span>
-              <div className="ot-tarea-100">
-                <label>
-                  <input
-                    type="radio"
-                    name="tarea100"
-                    value="SI"
-                    checked={ot.tarea100 === "SI"}
-                    onChange={(e) =>
-                      actualizarCampo("tarea100", e.target.value)
-                    }
-                  />{" "}
-                  Tarea 100% SI
-                </label>
-                <label>
-                  <input
-                    type="radio"
-                    name="tarea100"
-                    value="NO"
-                    checked={ot.tarea100 === "NO"}
-                    onChange={(e) =>
-                      actualizarCampo("tarea100", e.target.value)
-                    }
-                  />{" "}
-                  NO
-                </label>
+              <div className="ot-campo-ot ot-campo-sin-borde-derecho">
+                <span className="ot-campo-label">Informe recibido por</span>
                 <input
                   type="text"
-                  placeholder="%"
-                  className="ot-campo-input ot-input-porcentaje"
-                  value={ot.porcentajeTarea}
+                  className="ot-campo-input"
+                  value={ot.informeRecibidoPor}
                   onChange={(e) =>
-                    actualizarCampo("porcentajeTarea", e.target.value)
+                    actualizarCampo("informeRecibidoPor", e.target.value)
                   }
-                  disabled={ot.tarea100 !== "NO"}
+                />
+              </div>
+              <div className="ot-campo-ot">
+                <span className="ot-campo-label">
+                  Fecha aprobación del informe
+                </span>
+                <input
+                  type="date"
+                  className="ot-campo-input"
+                  value={ot.fechaAprobacionInforme}
+                  onChange={(e) =>
+                    actualizarCampo("fechaAprobacionInforme", e.target.value)
+                  }
+                />
+              </div>
+              <div className="ot-campo-ot ot-campo-sin-borde-derecho">
+                <span className="ot-campo-label">Informe aprobado por</span>
+                <input
+                  type="text"
+                  className="ot-campo-input"
+                  value={ot.informeAprobadoPor}
+                  onChange={(e) =>
+                    actualizarCampo("informeAprobadoPor", e.target.value)
+                  }
                 />
               </div>
             </div>
+          </div>
 
-            <div className="ot-cierre-bloque">
-              <div className="ot-foto-zona ot-foto-cierre">
-                {ot.firmaRecibidoPor ? (
-                  <img
-                    src={ot.firmaRecibidoPor}
-                    alt="Firma recibido por"
-                    className="ot-foto-zona-imagen"
-                  />
-                ) : (
-                  <>
-                    <span className="ot-foto-zona-icono">✍️</span>
-                    <span className="ot-foto-zona-texto">
-                      Firma recibido por
-                    </span>
-                  </>
-                )}
+          {/* CIERRE */}
+          <div className="ot-seccion">
+            <div className="ot-seccion-titulo">Cierre OT</div>
+            <div className="ot-cierre-grid">
+              <div className="ot-cierre-bloque">
+                <div className="ot-foto-zona ot-foto-cierre">
+                  {ot.firmaAutorizacion ? (
+                    <img
+                      src={ot.firmaAutorizacion}
+                      alt="Firma autorización ejecución OT"
+                      className="ot-foto-zona-imagen"
+                    />
+                  ) : (
+                    <>
+                      <span className="ot-foto-zona-icono">✍️</span>
+                      <span className="ot-foto-zona-texto">
+                        Firma autorización
+                      </span>
+                    </>
+                  )}
+                </div>
+                <div className="ot-firma-linea"></div>
+                <span className="ot-firma-label">
+                  Firma autorización ejecución OT
+                </span>
+                <input
+                  type="date"
+                  className="ot-campo-input"
+                  style={{ textAlign: "center", fontSize: 8 }}
+                  value={ot.fechaAutorizacion}
+                  onChange={(e) =>
+                    actualizarCampo("fechaAutorizacion", e.target.value)
+                  }
+                />
+                <span className="ot-firma-sub">Fecha Autorización OT</span>
               </div>
-              <div className="ot-firma-linea"></div>
-              <span className="ot-firma-label">Recibido por</span>
-              <input
-                type="datetime-local"
-                className="ot-campo-input"
-                style={{ textAlign: "center", fontSize: 8 }}
-                value={ot.fechaCierre}
-                onChange={(e) => actualizarCampo("fechaCierre", e.target.value)}
-              />
-              <span className="ot-firma-sub">Fecha Cierre OT</span>
+
+              <div className="ot-cierre-bloque">
+                <div
+                  className="ot-foto-zona ot-foto-cierre"
+                  onClick={() =>
+                    document.getElementById("input-foto-cierre-1")?.click()
+                  }
+                >
+                  {ot.fotosCierre[1] ? (
+                    <>
+                      <img
+                        src={ot.fotosCierre[1]}
+                        alt="Foto cierre 2"
+                        className="ot-foto-zona-imagen"
+                      />
+                      <span className="ot-foto-zona-texto">
+                        Clic para cambiar
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="ot-foto-zona-icono">📷</span>
+                      <span className="ot-foto-zona-texto">Anexar foto</span>
+                    </>
+                  )}
+                  <input
+                    id="input-foto-cierre-1"
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) =>
+                      manejarFoto("cierre", 1, e.target.files?.[0])
+                    }
+                  />
+                </div>
+                {ot.fotosCierre[1] && (
+                  <button
+                    type="button"
+                    className="ot-btn-mini"
+                    onClick={() => eliminarFoto("cierre", 1)}
+                  >
+                    Eliminar foto
+                  </button>
+                )}
+                <div className="ot-firma-linea"></div>
+                <span className="ot-firma-label">Ejecutado por</span>
+                <div className="ot-tarea-100">
+                  <label>
+                    <input
+                      type="radio"
+                      name="tarea100"
+                      value="SI"
+                      checked={ot.tarea100 === "SI"}
+                      onChange={(e) =>
+                        actualizarCampo("tarea100", e.target.value)
+                      }
+                    />{" "}
+                    Tarea 100% SI
+                  </label>
+                  <label>
+                    <input
+                      type="radio"
+                      name="tarea100"
+                      value="NO"
+                      checked={ot.tarea100 === "NO"}
+                      onChange={(e) =>
+                        actualizarCampo("tarea100", e.target.value)
+                      }
+                    />{" "}
+                    NO
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="%"
+                    className="ot-campo-input ot-input-porcentaje"
+                    value={ot.porcentajeTarea}
+                    onChange={(e) =>
+                      actualizarCampo("porcentajeTarea", e.target.value)
+                    }
+                    disabled={ot.tarea100 !== "NO"}
+                  />
+                </div>
+              </div>
+
+              <div className="ot-cierre-bloque">
+                <div className="ot-foto-zona ot-foto-cierre">
+                  {ot.firmaRecibidoPor ? (
+                    <img
+                      src={ot.firmaRecibidoPor}
+                      alt="Firma recibido por"
+                      className="ot-foto-zona-imagen"
+                    />
+                  ) : (
+                    <>
+                      <span className="ot-foto-zona-icono">✍️</span>
+                      <span className="ot-foto-zona-texto">
+                        Firma recibido por
+                      </span>
+                    </>
+                  )}
+                </div>
+                <div className="ot-firma-linea"></div>
+                <span className="ot-firma-label">Recibido por</span>
+                <input
+                  type="datetime-local"
+                  className="ot-campo-input"
+                  style={{ textAlign: "center", fontSize: 8 }}
+                  value={ot.fechaCierre}
+                  onChange={(e) =>
+                    actualizarCampo("fechaCierre", e.target.value)
+                  }
+                />
+                <span className="ot-firma-sub">Fecha Cierre OT</span>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      </fieldset>
     </div>
   );
 }

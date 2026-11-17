@@ -1,0 +1,836 @@
+/* ============ Landing: dos botones ============ */
+.pendientes-landing {
+  padding: 24px;
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.pendientes-landing-header h1 {
+  margin: 0 0 6px 0;
+}
+.pendientes-landing-sub {
+  margin: 0;
+  color: #4a5462;
+}
+.pendientes-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 18px;
+}
+.pendientes-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 22px 24px;
+  background: #fff;
+  border: 1px solid #e3e6eb;
+  border-radius: 12px;
+  text-decoration: none;
+  color: #1b1f24;
+  box-shadow: 0 1px 2px rgba(15, 20, 30, 0.04);
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease,
+    border-color 0.12s ease;
+}
+.pendientes-card:hover {
+  transform: translateY(-2px);
+  border-color: #1f6feb;
+  box-shadow: 0 6px 18px rgba(31, 111, 235, 0.12);
+}
+.pendientes-card-icon {
+  font-size: 28px;
+  line-height: 1;
+}
+.pendientes-card-title {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+.pendientes-card-desc {
+  font-size: 14px;
+  color: #4a5462;
+}
+.pendientes-card-cta {
+  margin-top: 8px;
+  font-weight: 600;
+  color: #1f6feb;
+}
+
+/* ============ Subpágina con tabla ============ */
+.pendientes-page {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: calc(100vh - 64px);
+  overflow: hidden;
+}
+
+.pendientes-control-panel {
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.05),
+    0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  overflow: hidden;
+}
+
+/* 👇 NUEVA ESTRUCTURA DE HEADER (GRID PARA CENTRAR) */
+.pendientes-header {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  padding: 16px 20px;
+  gap: 16px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.pendientes-title-left {
+  justify-self: start;
+}
+
+.pendientes-title-center {
+  justify-self: center;
+}
+
+.pendientes-title-center h1 {
+  margin: 0;
+  font-size: 18px;
+  color: #1e293b;
+  font-weight: 700;
+}
+
+.pendientes-actions {
+  justify-self: end;
+  display: flex;
+  gap: 8px;
+  flex-direction: row;
+  align-items: center;
+}
+
+.pendientes-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #334155;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.15s;
+}
+.pendientes-back:hover {
+  background: #e2e8f0;
+  border-color: #94a3b8;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid #c9ced6;
+  background: #fff;
+  color: #1b1f24;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+}
+.btn:hover:not(:disabled) {
+  background: #f4f6f8;
+}
+.btn:disabled,
+.btn.disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.btn-primary {
+  background: #1f6feb;
+  border-color: #1f6feb;
+  color: #fff;
+}
+.btn-primary:hover:not(:disabled) {
+  background: #1a5fc9;
+}
+
+.btn-sm {
+  padding: 0 14px;
+  font-size: 13px;
+  height: 34px;
+}
+
+/* ============ Barra de Filtros ============ */
+.pendientes-filters-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+  background: #f8fafc;
+  padding: 12px 20px;
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 120px;
+  max-width: 200px;
+}
+
+.filter-group label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.filter-group select {
+  padding: 4px 8px;
+  font-size: 13px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  color: #1e293b;
+  height: 32px;
+  outline: none;
+  transition: border-color 0.15s;
+  width: 100%;
+}
+.filter-group select:focus {
+  border-color: #1f6feb;
+  box-shadow: 0 0 0 2px rgba(31, 111, 235, 0.2);
+}
+
+.btn-clear-filters {
+  background: transparent;
+  border: none;
+  color: #ef4444;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 6px 8px;
+  margin-bottom: 2px;
+  border-radius: 4px;
+}
+.btn-clear-filters:hover {
+  background: #fee2e2;
+}
+
+/* ============ Tabla ============ */
+.pendientes-error {
+  background: #fde2e1;
+  color: #7a1d1d;
+  padding: 10px 14px;
+  border-radius: 6px;
+  border-left: 4px solid #dc2626;
+}
+
+.pendientes-table-wrapper {
+  flex: 1;
+  overflow: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.pendientes-table {
+  border-collapse: collapse;
+  width: max-content;
+  min-width: 100%;
+  font-size: 13px;
+}
+.pendientes-table thead th {
+  position: sticky;
+  top: 0;
+  background: #f1f5f9;
+  color: #334155;
+  font-weight: 600;
+  text-align: left;
+  padding: 10px 14px;
+  border-bottom: 1px solid #e2e8f0;
+  white-space: nowrap;
+  z-index: 1;
+}
+.pendientes-table tbody td {
+  padding: 8px 14px;
+  border-bottom: 1px solid #f1f5f9;
+  color: #475569;
+  vertical-align: top;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pendientes-table tbody tr:nth-child(even) {
+  background: #fafbfc;
+}
+.pendientes-table tbody tr:hover {
+  background: #f1f5f9;
+}
+
+/* 👇 ESTILO PARA CELDAS CON DOBLE CLIC */
+.pendientes-table tbody td.cell-expandible {
+  cursor: zoom-in;
+  color: #1f6feb;
+}
+.pendientes-table tbody td.cell-expandible:hover {
+  background: #eff6ff;
+}
+
+.pendientes-table .empty {
+  text-align: center;
+  padding: 32px;
+  color: #94a3b8;
+  font-style: italic;
+}
+
+/* ============ Modales ============ */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 20, 30, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+/* Modal general (Formulario) */
+.modal {
+  background: #fff;
+  border-radius: 12px;
+  width: min(720px, 92vw);
+  max-height: 86vh;
+  overflow: auto;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+}
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+.form-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #475569;
+}
+.form-grid input {
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 13px;
+}
+.form-grid input:focus {
+  outline: none;
+  border-color: #1f6feb;
+}
+
+/* 👇 Modal para ver texto largo (Doble clic) */
+.modal-text-view {
+  background: #fff;
+  border-radius: 12px;
+  width: min(800px, 92vw);
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+}
+
+.modal-text-view h3 {
+  margin: 0 0 16px 0;
+  font-size: 18px;
+  color: #1e293b;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 12px;
+}
+
+.text-content {
+  flex: 1;
+  overflow-y: auto;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #334155;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: #f8fafc;
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+}
+/* ============ INDICADORES DE ANOMALÍAS (Landing) ============ */
+.dashboard-anomalias-container {
+  margin-top: 20px;
+  padding: 24px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+}
+
+.dashboard-section-header-centered {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.dashboard-section-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #1f6feb;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.dashboard-section-header-centered h2 {
+  margin: 4px 0 0 0;
+  font-size: 20px;
+  color: #1e293b;
+}
+
+.loading-state {
+  text-align: center;
+  padding: 40px;
+  color: #64748b;
+  font-style: italic;
+}
+
+.anomalias-charts-grid {
+  display: grid;
+  grid-template-columns: 3fr 2fr;
+  gap: 24px;
+}
+
+@media (max-width: 900px) {
+  .anomalias-charts-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.chart-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+.chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+}
+
+.chart-header h3 {
+  margin: 4px 0 0 0;
+  font-size: 16px;
+  color: #1e293b;
+}
+
+.chart-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.chart-totals {
+  display: flex;
+  gap: 8px;
+}
+
+.total-pill {
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.total-pendiente {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.total-ejecutado {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.chart-total-number {
+  font-size: 24px;
+  color: #1e293b;
+}
+
+/* --- Gráfico de Barras --- */
+.bar-chart-container {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-around;
+  min-height: 200px;
+  border-bottom: 2px solid #cbd5e1;
+  padding-bottom: 8px;
+  gap: 16px;
+}
+
+.bar-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  height: 100%;
+  justify-content: flex-end;
+}
+
+.bars-wrapper {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 100%;
+  width: 100%;
+  justify-content: center;
+}
+
+.bar-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+  width: 28px;
+}
+
+.bar {
+  width: 100%;
+  border-radius: 4px 4px 0 0;
+  transition: height 0.3s ease;
+  min-height: 4px;
+}
+
+.bar-pendiente {
+  background: #ef4444;
+}
+.bar-ejecutado {
+  background: #10b981;
+}
+
+.bar-value {
+  font-size: 11px;
+  font-weight: 700;
+  color: #475569;
+  margin-bottom: 4px;
+}
+
+.bar-label {
+  margin-top: 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #334155;
+}
+
+.empty-chart {
+  text-align: center;
+  width: 100%;
+  color: #94a3b8;
+  font-style: italic;
+  padding: 40px 0;
+}
+
+.chart-legend {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  margin-top: 16px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #475569;
+  font-weight: 600;
+}
+
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+/* --- Gráfico de Torta --- */
+.pie-chart-layout {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 32px;
+  flex: 1;
+  flex-wrap: wrap;
+}
+
+.pie-chart {
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.pie-chart-center {
+  width: 100px;
+  height: 100px;
+  background: #f8fafc;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.pie-chart-center strong {
+  font-size: 20px;
+  color: #1e293b;
+}
+
+.pie-chart-center span {
+  font-size: 11px;
+  color: #64748b;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.pie-chart-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+  min-width: 180px;
+}
+
+.pie-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pie-legend-info {
+  display: flex;
+  justify-content: space-between;
+  flex: 1;
+  align-items: center;
+}
+
+.pie-legend-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.pie-legend-stats {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.pie-legend-stats strong {
+  font-size: 13px;
+  color: #1e293b;
+}
+
+.pie-legend-stats small {
+  font-size: 11px;
+  color: #64748b;
+}
+/* ============ HEADER PROFESIONAL (Landing) ============ */
+.pendientes-header-card {
+  background: #ffffff; /* 👈 Cambiado a blanco */
+  color: #1e293b; /* 👈 Texto oscuro */
+  padding: 24px 32px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  margin-bottom: 8px;
+}
+
+.pendientes-header-card h1 {
+  margin: 0 0 8px 0;
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.pendientes-header-card p {
+  margin: 0;
+  font-size: 15px;
+  color: #94a3b8;
+}
+
+/* ============ TABLEROS DE INDICADORES (Anomalías y RETIE) ============ */
+.module-dashboard {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  margin-top: 16px;
+}
+
+.module-header {
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #f1f5f9;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.module-label {
+  display: block;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f22eb;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.module-header h2 {
+  margin: 0;
+  font-size: 15px;
+  color: #1e293b;
+  text-align: center;
+}
+
+.module-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 24px;
+  align-items: stretch;
+}
+
+@media (max-width: 1024px) {
+  .module-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.charts-col {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Tarjetas de los gráficos */
+.chart-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+.chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+
+.chart-header h3 {
+  margin: 0;
+  font-size: 15px;
+  color: #334155;
+  font-weight: 600;
+}
+
+/* ============ TABLA LATERAL ============ */
+.table-col {
+  display: flex;
+  height: 100%;
+}
+
+.table-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.table-scroll-container {
+  flex: 1;
+  overflow-y: auto;
+  max-height: 510px; /* Ajusta según los gráficos */
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.dashboard-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.dashboard-table th {
+  position: sticky;
+  top: 0;
+  background: #f1f5f9;
+  padding: 10px 12px;
+  text-align: left;
+  font-weight: 600;
+  color: #475569;
+  border-bottom: 1px solid #e2e8f0;
+  z-index: 1;
+}
+
+.dashboard-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid #f1f5f9;
+  color: #334155;
+}
+
+.dashboard-table tbody tr:nth-child(even) {
+  background: #fafbfc;
+}
+
+.dashboard-table tbody tr:hover {
+  background: #f1f5f9;
+}
+
+/* El resto de estilos de gráficos (barras, torta, etc.) 
+   son los mismos que ya definimos en el paso anterior. 
+   Solo asegúrate de que estén en el archivo. */

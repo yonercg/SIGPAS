@@ -8,11 +8,15 @@ import PM from "./pages/PM";
 import Actividades from "./pages/Actividades";
 import Informes from "./pages/Informes";
 import OT from "./pages/OT";
+import Anexos from "./pages/Anexos";
 import Usuarios from "./pages/Usuarios";
 import MainLayout from "./layouts/MainLayout";
 import { ActividadesProvider } from "./context/ActividadesContext";
 import { AuthProvider } from "./context/AuthContext";
 import RutaProtegida from "./components/RutaProtegida.jsx";
+import Auditoria from "./pages/Auditoria";
+import Pendientes from "./pages/Pendientes";
+import PendientesTabla from "./pages/PendientesTabla";
 
 function App() {
   return (
@@ -20,16 +24,8 @@ function App() {
       <ActividadesProvider>
         <BrowserRouter>
           <Routes>
-            {/* ========================================= */}
-            {/* PÁGINA PÚBLICA                            */}
-            {/* ========================================= */}
-
             <Route path="/" element={<Home />} />
             <Route path="/login" element={<Login />} />
-
-            {/* ========================================= */}
-            {/* APLICACIÓN PROTEGIDA                      */}
-            {/* ========================================= */}
 
             <Route
               element={
@@ -38,6 +34,14 @@ function App() {
                 </RutaProtegida>
               }
             >
+              <Route
+                path="/auditoria"
+                element={
+                  <RutaProtegida pagina="auditoria">
+                    <Auditoria />
+                  </RutaProtegida>
+                }
+              />
               <Route
                 path="/dashboard"
                 element={
@@ -92,6 +96,46 @@ function App() {
                 }
               />
 
+              {/* 🆕 ANEXOS — usa el mismo permiso que Actividades */}
+              <Route
+                path="/anexos"
+                element={
+                  <RutaProtegida pagina="actividades">
+                    <Anexos />
+                  </RutaProtegida>
+                }
+              />
+
+              {/* 🆕 PENDIENTES — landing con los dos formatos */}
+              <Route
+                path="/pendientes"
+                element={
+                  <RutaProtegida pagina="pendientes">
+                    <Pendientes />
+                  </RutaProtegida>
+                }
+              />
+
+              {/* 🆕 PENDIENTES · ANOMALIAS */}
+              <Route
+                path="/pendientes/anomalias"
+                element={
+                  <RutaProtegida pagina="pendientes">
+                    <PendientesTabla tipo="anomalias" />
+                  </RutaProtegida>
+                }
+              />
+
+              {/* 🆕 PENDIENTES · RETIE */}
+              <Route
+                path="/pendientes/retie"
+                element={
+                  <RutaProtegida pagina="pendientes">
+                    <PendientesTabla tipo="retie" />
+                  </RutaProtegida>
+                }
+              />
+
               <Route
                 path="/usuarios"
                 element={
@@ -101,7 +145,6 @@ function App() {
                 }
               />
 
-              {/* Cualquier ruta desconocida dentro del layout → dashboard */}
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Route>
           </Routes>

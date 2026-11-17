@@ -8,8 +8,8 @@ function MainLayout() {
     usuarioActual,
     cerrarSesion,
     tienePermiso,
-    esCuadrilla, // 👈 NUEVO
-    cuadrillaUsuario, // 👈 NUEVO
+    esCuadrilla,
+    cuadrillaUsuario,
   } = useAuth();
 
   return (
@@ -95,6 +95,28 @@ function MainLayout() {
             </Link>
           )}
 
+          {/* 🆕 PENDIENTES (debajo de Órdenes de Trabajo) */}
+          {tienePermiso("pendientes") && (
+            <Link
+              to="/pendientes"
+              className={location.pathname === "/pendientes" ? "active" : ""}
+            >
+              <span>📌</span>
+              Pendientes
+            </Link>
+          )}
+
+          {/* AUDITORÍA (debajo de Pendientes) */}
+          {tienePermiso("auditoria") && (
+            <Link
+              to="/auditoria"
+              className={location.pathname === "/auditoria" ? "active" : ""}
+            >
+              <span>📋</span>
+              Auditoría
+            </Link>
+          )}
+
           {/* USUARIOS */}
           {tienePermiso("usuarios") && (
             <Link
@@ -110,7 +132,7 @@ function MainLayout() {
         <div className="sidebar-footer">
           SIGPAS
           <div> ---------------------ING. Yoner Caicedo</div>
-          <span>v1.0</span>
+          <span>v1.1</span>
         </div>
       </aside>
 

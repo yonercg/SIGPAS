@@ -6,17 +6,17 @@
    ========================================================= */
 
 const TAMANO_DEFECTO = {
-  maxAncho: 1600,
-  maxAlto: 1600,
-  calidad: 0.75,
+  maxAncho: 1500,
+  maxAlto: 1500,
+  calidad: 0.85,
   tipoSalida: "image/jpeg",
 };
 
 const TAMANO_FIRMA = {
-  maxAncho: 800,
-  maxAlto: 800,
-  calidad: 0.92,
-  tipoSalida: "image/png",
+  maxAncho: 600,
+  maxAlto: 600,
+  calidad: 0.85,
+  tipoSalida: "image/jpeg",
 };
 
 /* ---------------------------------------------------------

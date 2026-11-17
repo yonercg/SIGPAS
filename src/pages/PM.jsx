@@ -4,6 +4,8 @@ import { useActividades } from "../context/ActividadesContext";
 import { cuadrillas as cuadrillasData } from "../data/cuadrillas";
 import { supabase } from "../lib/supabase";
 import "./PM.css";
+import { useAuth } from "../context/AuthContext";
+import { registrarAuditoria } from "../lib/auditoria";
 
 const PM_ROW_PLAN = "plan";
 const PM_ROW_CONSECUTIVOS = "consecutivos";
@@ -185,6 +187,8 @@ const formatearFechaCorta = (fecha) => {
 function PM() {
   const anioActual = new Date().getFullYear();
   const navigate = useNavigate();
+  // 🆕 OBTENER USUARIO
+  const { usuarioActual } = useAuth();
 
   const [actividadesPM, setActividadesPM] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -449,6 +453,13 @@ function PM() {
       estado: "P",
       semanaReprogramada: "",
     });
+    // 🆕 REGISTRO DE AUDITORÍA - CREAR
+    registrarAuditoria(usuarioActual, "Plan de Mantenimiento", "Crear", {
+      pmId: nuevaActividad.pmId,
+      subestacion: nuevaActividad.subestacion,
+      tipo: nuevaActividad.tipo,
+      semana: nuevaActividad.semana,
+    });
   };
 
   // =================================================
@@ -464,6 +475,15 @@ function PM() {
     setActividadesPM((anteriores) =>
       anteriores.filter((actividad) => actividad.id !== id),
     );
+    // 🆕 REGISTRO DE AUDITORÍA - ELIMINAR
+    const actividad = actividadesPM.find((a) => a.id === id);
+    if (actividad) {
+      registrarAuditoria(usuarioActual, "Plan de Mantenimiento", "Eliminar", {
+        pmId: actividad.pmId,
+        subestacion: actividad.subestacion,
+        tipo: actividad.tipo,
+      });
+    }
   };
 
   // =================================================
@@ -769,6 +789,12 @@ function PM() {
           : item,
       ),
     );
+    // 🆕 REGISTRO DE AUDITORÍA - CAMBIO DE ESTADO
+    registrarAuditoria(usuarioActual, "Plan de Mantenimiento", "Estado", {
+      pmId: actividad.pmId,
+      subestacion: actividad.subestacion,
+      nuevoEstado: "No Ejecutada (NE)",
+    });
   };
 
   // =================================================
@@ -797,6 +823,17 @@ function PM() {
           : actividad,
       ),
     );
+    // 🆕 REGISTRO DE AUDITORÍA - MODIFICAR DETALLES
+    registrarAuditoria(usuarioActual, "Plan de Mantenimiento", "Modificar", {
+      pmId: actividadDetalles.pmId,
+      subestacion: actividadDetalles.subestacion,
+      accion: "Actualización de detalles",
+      // Guardamos máximo 100 caracteres del texto para tener contexto
+      fragmentoTexto:
+        textoDetalles.length > 100
+          ? textoDetalles.substring(0, 100) + "..."
+          : textoDetalles,
+    });
 
     cerrarDetalles();
   };

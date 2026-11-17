@@ -269,17 +269,18 @@ export default function Usuarios() {
                     <td>
                       <span className="usuarios-rol">{u.rol}</span>
                     </td>
+                    {/* 🆕 FIX: Celda de Cuadrilla corregida */}
                     <td>
-                      <td>
-                        {u.cuadrilla ? (
-                          <span className="usuarios-cuadrilla">
-                            {u.cuadrilla}
-                          </span>
-                        ) : (
-                          "—"
-                        )}
-                      </td>
-
+                      {u.cuadrilla ? (
+                        <span className="usuarios-cuadrilla">
+                          {u.cuadrilla}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    {/* 🆕 FIX: Celda de Estado con su propio <td> */}
+                    <td>
                       <span
                         className={`usuarios-estado ${
                           u.activo ? "activo" : "inactivo"

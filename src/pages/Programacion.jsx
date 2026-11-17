@@ -8,6 +8,8 @@ import {
   cargarCambiosManuales,
   guardarCambiosManuales,
 } from "../lib/configuracion";
+import { useAuth } from "../context/AuthContext";
+import { registrarAuditoria } from "../lib/auditoria";
 
 // =========================================
 // CONFIGURACIÓN BASE DE PROGRAMACIÓN
@@ -176,6 +178,7 @@ const obtenerDiferenciaSemanas = (
 // =========================================
 
 function Programacion() {
+  const { usuarioActual } = useAuth();
   // =========================================
   // CONTEXT DE ACTIVIDADES
   // =========================================
@@ -967,6 +970,11 @@ function Programacion() {
     if (!confirmar) {
       return;
     }
+    registrarAuditoria(usuarioActual, "Programación", "Eliminar", {
+      actividad: actividad.nombre,
+      subestacion: actividad.subestacion,
+      codigoOT: actividad.codigoOT,
+    });
 
     eliminarActividadContext(actividad.id);
   };
@@ -1008,6 +1016,11 @@ function Programacion() {
 
       observacionReprogramacion: undefined,
     };
+    registrarAuditoria(usuarioActual, "Programación", "Duplicar", {
+      actividad: actividad.nombre,
+      subestacion: actividad.subestacion,
+      codigoOT: actividad.codigoOT,
+    });
 
     agregarActividad(actividadDuplicada);
   };
@@ -1044,6 +1057,12 @@ function Programacion() {
     }
 
     cambiarEstadoContext(id, nuevoEstado);
+    registrarAuditoria(usuarioActual, "Programación", "Estado", {
+      actividad: actividad.nombre,
+      subestacion: actividad.subestacion,
+      codigoOT: actividad.codigoOT,
+      nuevoEstado,
+    });
   };
 
   // =========================================
@@ -1455,8 +1474,14 @@ function Programacion() {
 
       modificarActividadContext(actividadEditandoId, cambios);
 
-      cerrarFormularioActividad();
+      // 🆕 CORREGIDO: Usar 'nuevaActividad' en lugar de 'nueva'
+      registrarAuditoria(usuarioActual, "Programación", "Modificar", {
+        actividad: nuevaActividad.nombre,
+        subestacion: nuevaActividad.subestacion,
+        codigoOT: nuevaActividad.codigoOT,
+      });
 
+      cerrarFormularioActividad();
       return;
     }
 
@@ -1513,6 +1538,11 @@ function Programacion() {
       estado: "Pendiente",
       pmId: "",
     });
+    registrarAuditoria(usuarioActual, "Programación", "Crear", {
+      actividad: nueva.nombre,
+      subestacion: nueva.subestacion,
+      codigoOT: nueva.codigoOT,
+    });
   };
 
   // =========================================
@@ -1558,68 +1588,81 @@ function Programacion() {
   };
 
   // =========================================
-  // FILTRAR ACTIVIDADES
+  // FILTRAR Y ORDENAR ACTIVIDADES
   // =========================================
 
-  const actividadesFiltradas = actividades.filter((actividad) => {
-    const fechaActividad = obtenerFechaActividad(actividad);
+  const actividadesFiltradas = actividades
+    .filter((actividad) => {
+      const fechaActividad = obtenerFechaActividad(actividad);
 
-    let coincideSemana = false;
+      let coincideSemana = false;
 
-    if (fechaActividad) {
-      const semanaActividad = obtenerNumeroSemanaISO(fechaActividad);
+      if (fechaActividad) {
+        const semanaActividad = obtenerNumeroSemanaISO(fechaActividad);
+        const anioActividad = obtenerAnioISO(fechaActividad);
 
-      const anioActividad = obtenerAnioISO(fechaActividad);
+        coincideSemana =
+          semanaActividad === semanaActual && anioActividad === anioActual;
+      }
 
-      coincideSemana =
-        semanaActividad === semanaActual && anioActividad === anioActual;
-    }
+      const textoBusqueda = busqueda.toLowerCase().trim();
+      const coincideBusqueda =
+        !textoBusqueda ||
+        obtenerTextoActividad(actividad).includes(textoBusqueda);
 
-    const textoBusqueda = busqueda.toLowerCase().trim();
+      const coincideEstado =
+        filtroEstado === "Todos" || actividad.estado === filtroEstado;
 
-    const coincideBusqueda =
-      !textoBusqueda ||
-      obtenerTextoActividad(actividad).includes(textoBusqueda);
+      const coincideSubestacion =
+        filtroSubestacion === "Todas" ||
+        actividad.subestacion === filtroSubestacion;
 
-    const coincideEstado =
-      filtroEstado === "Todos" || actividad.estado === filtroEstado;
+      const coincideCuadrilla =
+        filtroCuadrilla === "Todas" ||
+        obtenerCuadrillaActividad(actividad) === filtroCuadrilla;
 
-    const coincideSubestacion =
-      filtroSubestacion === "Todas" ||
-      actividad.subestacion === filtroSubestacion;
+      const tipoActividad = actividad.tipo || "";
+      const esFueraDePM = TIPOS_FUERA_PM.includes(tipoActividad);
+      const tienePM = Boolean(actividad.pmId && actividad.pmId.trim());
 
-    const coincideCuadrilla =
-      filtroCuadrilla === "Todas" ||
-      obtenerCuadrillaActividad(actividad) === filtroCuadrilla;
+      const coincidePM =
+        filtroPM === "Todos" ||
+        (filtroPM === "PM" && tienePM && !esFueraDePM) ||
+        (filtroPM === "Fuera de PM" && (!tienePM || esFueraDePM));
 
-    const tipoActividad = actividad.tipo || "";
+      const mantenimientoActividad = actividad.mantenimiento || "";
+      const coincideMantenimiento =
+        filtroMantenimiento === "Todos" ||
+        mantenimientoActividad === filtroMantenimiento;
 
-    const esFueraDePM = TIPOS_FUERA_PM.includes(tipoActividad);
+      return (
+        coincideSemana &&
+        coincideBusqueda &&
+        coincideEstado &&
+        coincideSubestacion &&
+        coincideCuadrilla &&
+        coincidePM &&
+        coincideMantenimiento
+      );
+    })
+    // 🆕 ORDENAMIENTO DESCENDENTE POR FECHA
+    .sort((a, b) => {
+      const fechaA = obtenerFechaActividad(a);
+      const fechaB = obtenerFechaActividad(b);
 
-    const tienePM = Boolean(actividad.pmId && actividad.pmId.trim());
+      // Las actividades sin fecha válida van al final
+      if (!fechaA && !fechaB) return 0;
+      if (!fechaA) return 1;
+      if (!fechaB) return -1;
 
-    // Usa esFueraDePM para clasificar aunque haya pmId heredado.
-    const coincidePM =
-      filtroPM === "Todos" ||
-      (filtroPM === "PM" && tienePM && !esFueraDePM) ||
-      (filtroPM === "Fuera de PM" && (!tienePM || esFueraDePM));
+      // Orden descendente: de la fecha más reciente a la más antigua
+      const difFecha = fechaB.getTime() - fechaA.getTime();
+      if (difFecha !== 0) return difFecha;
 
-    const mantenimientoActividad = actividad.mantenimiento || "";
-
-    const coincideMantenimiento =
-      filtroMantenimiento === "Todos" ||
-      mantenimientoActividad === filtroMantenimiento;
-
-    return (
-      coincideSemana &&
-      coincideBusqueda &&
-      coincideEstado &&
-      coincideSubestacion &&
-      coincideCuadrilla &&
-      coincidePM &&
-      coincideMantenimiento
-    );
-  });
+      // Desempate: si dos actividades son del mismo día,
+      // la última que se creó (ID más alto) aparecerá primero.
+      return Number(b.id) - Number(a.id);
+    });
 
   // =========================================
   // RESUMEN

@@ -345,7 +345,7 @@
 /* ================================================= */
 
 .actividades-tabla-contenedor {
-  position: relative;
+  position: center;
   width: 100%;
   overflow-x: auto;
   overflow-y: visible;
@@ -393,6 +393,8 @@
   text-align: left;
   border-bottom: 1px solid #e6e8ea;
   white-space: nowrap;
+  text-align: center;
+  vertical-align: middle;
 }
 
 .actividades-tabla td {
@@ -1575,4 +1577,12 @@
   .materiales-campo textarea {
     max-height: 220px;
   }
+}
+/* ================================================= */
+/* FIX: POSICIONAMIENTO DEL MENÚ FLOTANTE (PORTAL)   */
+/* ================================================= */
+.documentos-menu-portal {
+  position: fixed !important;
+  right: auto !important; /* Anula el right: 0 del menú original */
+  margin: 0 !important;
 }

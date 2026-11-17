@@ -10,6 +10,8 @@ export const PAGINAS = [
   { key: "informes", label: "Informes", ruta: "/informes" },
   { key: "ot", label: "Órdenes de Trabajo", ruta: "/ot" },
   { key: "usuarios", label: "Usuarios", ruta: "/usuarios" },
+  { key: "auditoria", label: "Auditoría", ruta: "/auditoria" },
+  { key: "pendientes", label: "Pendientes", ruta: "/pendientes" }, // 🆕 NUEVO
 ];
 
 export const ROLES = {
@@ -21,6 +23,8 @@ export const ROLES = {
     informes: true,
     ot: true,
     usuarios: true,
+    auditoria: true,
+    pendientes: true, // 🆕
   },
 
   Supervisor: {
@@ -31,6 +35,8 @@ export const ROLES = {
     informes: true,
     ot: true,
     usuarios: false,
+    auditoria: true,
+    pendientes: true, // 🆕
   },
 
   Operador: {
@@ -41,6 +47,8 @@ export const ROLES = {
     informes: false,
     ot: true,
     usuarios: false,
+    auditoria: false,
+    pendientes: false, // 🆕 (no asignado)
   },
 
   Consulta: {
@@ -51,11 +59,11 @@ export const ROLES = {
     informes: true,
     ot: true,
     usuarios: false,
+    auditoria: false,
+    pendientes: true, // 🆕 (solo lectura)
   },
 
-  // 👇 NUEVO: rol con acceso restringido a su propia cuadrilla.
-  //    El filtrado por cuadrilla se hace en el cliente (ver AuthContext
-  //    + Actividades / Informes / OT).
+  // 👇 Rol con acceso restringido a su propia cuadrilla.
   Cuadrilla: {
     dashboard: false,
     programacion: false,
@@ -64,6 +72,8 @@ export const ROLES = {
     informes: true,
     ot: true,
     usuarios: false,
+    auditoria: false,
+    pendientes: true, // 🆕 (solo lectura)
   },
 };
 
@@ -80,8 +90,16 @@ export function obtenerPermisosPorDefecto(rol) {
  */
 export function obtenerPrimeraRutaPermitida(permisos) {
   if (!permisos) return "/login";
-
   const primera = PAGINAS.find((p) => permisos[p.key]);
-
   return primera?.ruta || "/login";
+}
+
+/**
+ * ¿El rol puede MODIFICAR pendientes (subir Excel, crear, editar, eliminar)?
+ * Solo Administrador y Supervisor.
+ * @param {string|null|undefined} rol
+ * @returns {boolean}
+ */
+export function puedeEditarPendientes(rol) {
+  return rol === "Administrador" || rol === "Supervisor";
 }

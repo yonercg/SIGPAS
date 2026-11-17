@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { obtenerPrimeraRutaPermitida } from "../data/permisos";
@@ -13,13 +13,14 @@ export default function Login() {
   const [error, setError] = useState("");
   const [cargando, setCargando] = useState(false);
 
-  // Si ya hay sesión activa, redirige automáticamente.
-  if (usuarioActual) {
-    navigate(obtenerPrimeraRutaPermitida(usuarioActual.permisos), {
-      replace: true,
-    });
-    return null;
-  }
+  // ✅ FIX: Redirección segura usando useEffect
+  useEffect(() => {
+    if (usuarioActual) {
+      navigate(obtenerPrimeraRutaPermitida(usuarioActual.permisos), {
+        replace: true,
+      });
+    }
+  }, [usuarioActual, navigate]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();

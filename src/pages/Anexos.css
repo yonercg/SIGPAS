@@ -1,0 +1,619 @@
+/* ============================================================
+   SIGPAS — ANEXOS
+   ============================================================ */
+
+.anexos-page {
+  width: 100%;
+  max-width: 1450px;
+  margin: 0 auto;
+  padding: 22px 24px 40px;
+  box-sizing: border-box;
+}
+
+/* ============================================================
+   ENCABEZADO
+   ============================================================ */
+
+.anexos-title-card {
+  background: #ffffff;
+  border: 1px solid #e2e6e4;
+  border-radius: 10px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 8px rgba(20, 40, 30, 0.035);
+}
+
+.anexos-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 22px;
+  flex-wrap: wrap;
+}
+
+.anexos-etiqueta {
+  display: inline-block;
+  margin-bottom: 4px;
+  color: #1d6f42;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.anexos-header h1 {
+  margin: 0 0 4px;
+  color: #2648af;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.anexos-header p {
+  margin: 0;
+  color: #747b80;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.btn-volver-actividades {
+  padding: 8px 16px;
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  color: #4b5563;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.btn-volver-actividades:hover {
+  background: #f3f4f6;
+  color: #1f2937;
+}
+
+/* ============================================================
+   INFORMACIÓN DE LA ACTIVIDAD
+   ============================================================ */
+
+.anexos-actividad-card {
+  background: #ffffff;
+  border: 1px solid #e2e6e8;
+  border-radius: 10px;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+}
+
+.anexos-actividad-titulo {
+  display: block;
+  margin-bottom: 10px;
+  color: #2f6fa3;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.anexos-actividad-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: 18px;
+}
+
+.anexos-actividad-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.anexos-actividad-item span {
+  color: #6b7280;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.anexos-actividad-item strong {
+  color: #1f2937;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+/* ============================================================
+   ZONA DE SUBIDA
+   ============================================================ */
+
+.anexos-upload-card {
+  background: #ffffff;
+  border: 1px solid #e2e6e8;
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+}
+
+.anexos-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 32px 20px;
+  background: #f9fafb;
+  border: 2px dashed #cbd5e1;
+  border-radius: 10px;
+  text-align: center;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.15s ease;
+  user-select: none;
+}
+
+.anexos-dropzone:hover:not([aria-disabled="true"]) {
+  background: #f0f9f4;
+  border-color: #1d6f42;
+}
+
+.anexos-dropzone-activo {
+  background: #e8f5ee !important;
+  border-color: #1d6f42 !important;
+  transform: scale(1.01);
+}
+
+.anexos-dropzone[aria-disabled="true"] {
+  cursor: progress;
+  opacity: 0.85;
+}
+
+.anexos-dropzone-icono {
+  font-size: 36px;
+  line-height: 1;
+}
+
+.anexos-dropzone-titulo {
+  color: #1f2937;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.anexos-dropzone-descripcion {
+  color: #6b7280;
+  font-size: 12px;
+  line-height: 1.5;
+  max-width: 520px;
+}
+
+/* ---------- Progreso ---------- */
+
+.anexos-progreso-contenedor {
+  margin-top: 14px;
+}
+
+.anexos-progreso {
+  height: 8px;
+  background: #dbeafe;
+  border-radius: 999px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+.anexos-progreso-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #1d6f42, #4ade80);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+  box-shadow: 0 0 8px rgba(29, 111, 66, 0.35);
+}
+
+.anexos-progreso-texto {
+  color: #6b7280;
+  font-size: 11px;
+  text-align: center;
+}
+
+/* ---------- Error ---------- */
+
+.anexos-error {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  color: #991b1b;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* ============================================================
+   LISTA DE ANEXOS
+   ============================================================ */
+
+.anexos-lista-card {
+  background: #ffffff;
+  border: 1px solid #e2e6e8;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+}
+
+.anexos-lista-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid #edf0f2;
+}
+
+.anexos-lista-header h2 {
+  margin: 0;
+  color: #1f2937;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.anexos-contador {
+  color: #6b7280;
+  font-weight: 500;
+  font-size: 13px;
+}
+
+/* ---------- Vacío ---------- */
+
+.anexos-vacio {
+  padding: 48px 20px;
+  text-align: center;
+}
+
+.anexos-vacio-icono {
+  font-size: 40px;
+  margin-bottom: 8px;
+}
+
+.anexos-vacio h3 {
+  margin: 0 0 6px;
+  color: #374151;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.anexos-vacio p {
+  margin: 0 auto;
+  max-width: 400px;
+  color: #6b7280;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* ---------- Tabla ---------- */
+
+.anexos-tabla-contenedor {
+  overflow-x: auto;
+}
+
+.anexos-tabla {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+.anexos-tabla thead {
+  background: #f7f8f9;
+}
+
+.anexos-tabla th {
+  padding: 10px 12px;
+  color: #666c72;
+  font-size: 10px;
+  font-weight: 700;
+  text-align: center;
+  vertical-align: middle;
+  border-bottom: 1px solid #e6e8ea;
+  white-space: nowrap;
+}
+
+.anexos-tabla td {
+  padding: 10px 12px;
+  color: #4b5563;
+  font-size: 12px;
+  border-bottom: 1px solid #f0f1f2;
+  vertical-align: middle;
+  text-align: center;
+}
+
+.anexos-tabla tbody tr:hover {
+  background: #fafcfb;
+}
+
+.anexos-tabla tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* ---------- Columnas ---------- */
+
+.anexos-col-icono {
+  width: 46px;
+}
+
+.anexos-col-nombre {
+  text-align: left !important;
+  max-width: 380px;
+}
+
+.anexos-col-tipo {
+  width: 100px;
+}
+
+.anexos-col-tamaño {
+  width: 100px;
+  white-space: nowrap;
+}
+
+.anexos-col-fecha {
+  width: 150px;
+  white-space: nowrap;
+  color: #6b7280 !important;
+  font-size: 11px !important;
+}
+
+.anexos-col-acciones {
+  width: 200px;
+}
+
+/* ---------- Íconos de archivo ---------- */
+
+.anexo-icono {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  font-size: 16px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+}
+
+.anexo-icono-img {
+  background: #fef3c7;
+  border-color: #fde68a;
+}
+.anexo-icono-pdf {
+  background: #fee2e2;
+  border-color: #fecaca;
+}
+.anexo-icono-excel {
+  background: #dcfce7;
+  border-color: #bbf7d0;
+}
+.anexo-icono-word {
+  background: #dbeafe;
+  border-color: #bfdbfe;
+}
+.anexo-icono-zip {
+  background: #ede9fe;
+  border-color: #ddd6fe;
+}
+.anexo-icono-video {
+  background: #fce7f3;
+  border-color: #fbcfe8;
+}
+.anexo-icono-audio {
+  background: #f5f3ff;
+  border-color: #e9d5ff;
+}
+.anexo-icono-txt {
+  background: #f1f5f9;
+  border-color: #e2e8f0;
+}
+
+/* ---------- Nombre y tipo ---------- */
+
+.anexo-nombre {
+  display: inline-block;
+  max-width: 100%;
+  color: #1f2937;
+  font-weight: 600;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.anexo-tipo {
+  display: inline-block;
+  padding: 2px 8px;
+  background: #f1f5f9;
+  border-radius: 4px;
+  color: #475569;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.anexo-tamaño-grande {
+  color: #b45309 !important;
+  font-weight: 700;
+}
+
+/* ---------- Botones de acción ---------- */
+
+.btn-anexo {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+  white-space: nowrap;
+}
+
+.btn-anexo-descargar {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
+  margin-right: 4px;
+}
+
+.btn-anexo-descargar:hover {
+  background: #dbeafe;
+  border-color: #93c5fd;
+}
+
+.btn-anexo-eliminar {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  padding: 6px 9px;
+}
+
+.btn-anexo-eliminar:hover {
+  background: #fee2e2;
+  border-color: #fca5a5;
+}
+
+/* ============================================================
+   MODAL DE ELIMINACIÓN
+   ============================================================ */
+
+.anexos-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(17, 24, 39, 0.55);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  backdrop-filter: blur(2px);
+}
+
+.anexos-modal {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 24px 28px;
+  max-width: 420px;
+  width: 100%;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+  text-align: center;
+}
+
+.anexos-modal-icono {
+  font-size: 32px;
+  margin-bottom: 8px;
+}
+
+.anexos-modal h3 {
+  margin: 0 0 8px;
+  color: #1f2937;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.anexos-modal p {
+  margin: 0 0 18px;
+  color: #6b7280;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.anexos-modal-botones {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.btn-anexo-cancelar,
+.btn-anexo-confirmar {
+  padding: 8px 18px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.btn-anexo-cancelar {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+  color: #374151;
+}
+
+.btn-anexo-cancelar:hover {
+  background: #e5e7eb;
+}
+
+.btn-anexo-confirmar {
+  background: #dc2626;
+  color: #ffffff;
+}
+
+.btn-anexo-confirmar:hover {
+  background: #b91c1c;
+}
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+
+@media (max-width: 900px) {
+  .anexos-actividad-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .anexos-col-fecha,
+  .anexos-col-tipo {
+    display: none;
+  }
+
+  .anexos-col-nombre {
+    max-width: none;
+  }
+}
+
+@media (max-width: 600px) {
+  .anexos-page {
+    padding: 16px;
+  }
+
+  .anexos-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .anexos-tabla th,
+  .anexos-tabla td {
+    padding: 8px 6px;
+  }
+
+  .anexos-col-tamaño {
+    width: 70px;
+    font-size: 10px !important;
+  }
+
+  .anexos-col-acciones {
+    width: 130px;
+  }
+
+  .btn-anexo {
+    padding: 5px 7px;
+    font-size: 10px;
+  }
+
+  .btn-anexo-eliminar {
+    padding: 5px 7px;
+  }
+}
